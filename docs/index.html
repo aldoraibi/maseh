@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>الماسح — مسح ضوئي وطباعة من Canon PIXMA على الماك</title>
+<meta name="description" content="تطبيق ماك عربي في شريط القوائم للمسح الضوئي والطباعة من طابعات Canon PIXMA G-series. مسح متعدد الصفحات، OCR عربي، قوالب صور، ومتابعة الطباعة.">
+<meta property="og:title" content="الماسح — مسح ضوئي وطباعة من Canon PIXMA على الماك">
+<meta property="og:description" content="كانون ما توفّر تعريف ماسح ضوئي للماك. هذا التطبيق يحل المشكلة — مفتوح المصدر ومجاني.">
+<meta property="og:image" content="https://aldoraibi.github.io/maseh/screenshot.png">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0c0e12; --bg2:#12151b; --card:#161a22; --line:#242b36;
+  --fg:#eef1f6; --dim:#98a2b3; --faint:#69738a;
+  --accent:#3b82f6; --accent2:#60a5fa; --ok:#22c55e;
+  --radius:16px; --maxw:960px;
+}
+@media (prefers-color-scheme:light){
+  :root{ --bg:#fbfcfe; --bg2:#f2f5f9; --card:#ffffff; --line:#e3e8ef;
+         --fg:#0d1320; --dim:#55607a; --faint:#8a93a6; }
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  margin:0; background:var(--bg); color:var(--fg);
+  font-family:'thmanyah sans','IBM Plex Sans Arabic',system-ui,-apple-system,sans-serif;
+  font-size:17px; line-height:1.85; -webkit-font-smoothing:antialiased;
+}
+a{color:var(--accent2); text-decoration:none}
+a:hover{text-decoration:underline}
+.wrap{max-width:var(--maxw); margin:0 auto; padding:0 22px}
+
+/* ── الواجهة العلوية ── */
+.hero{
+  position:relative; overflow:hidden; text-align:center;
+  padding:74px 0 62px;
+  background:
+    radial-gradient(900px 420px at 50% -120px, rgba(59,130,246,.22), transparent 70%),
+    linear-gradient(180deg, var(--bg2), var(--bg));
+  border-bottom:1px solid var(--line);
+}
+.appicon{width:116px;height:116px;border-radius:26px;
+  box-shadow:0 18px 48px rgba(0,0,0,.35); margin-bottom:22px}
+h1{font-size:46px; line-height:1.25; margin:0 0 12px; font-weight:700; letter-spacing:-.4px}
+.tag{font-size:20px; color:var(--dim); margin:0 auto 10px; max-width:640px}
+.sub{font-size:15px; color:var(--faint); margin:0 auto 30px; max-width:600px}
+.cta{display:flex; gap:12px; justify-content:center; flex-wrap:wrap; margin-bottom:14px}
+.btn{
+  display:inline-flex; align-items:center; gap:9px;
+  padding:14px 30px; border-radius:12px; font-weight:600; font-size:17px;
+  background:var(--accent); color:#fff; border:1px solid transparent;
+  transition:transform .12s ease, filter .12s ease;
+}
+.btn:hover{filter:brightness(1.1); transform:translateY(-1px); text-decoration:none}
+.btn.ghost{background:transparent; color:var(--fg); border-color:var(--line)}
+.btn.ghost:hover{background:var(--card)}
+.req{font-size:13.5px; color:var(--faint)}
+
+/* ── اللقطة ── */
+.shotwrap{padding:52px 0 8px; text-align:center}
+.shot{
+  width:340px; max-width:88%; border-radius:18px;
+  border:1px solid var(--line);
+  box-shadow:0 26px 70px rgba(0,0,0,.4);
+}
+
+/* ── الأقسام ── */
+section{padding:56px 0}
+h2{font-size:27px; margin:0 0 8px; font-weight:700; letter-spacing:-.2px}
+.lead{color:var(--dim); margin:0 0 28px; font-size:16px}
+
+.grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(255px,1fr)); gap:14px}
+.card{
+  background:var(--card); border:1px solid var(--line);
+  border-radius:var(--radius); padding:20px 22px;
+}
+.card h3{margin:0 0 6px; font-size:16.5px; font-weight:600}
+.card p{margin:0; color:var(--dim); font-size:14.5px; line-height:1.75}
+.ico{font-size:22px; display:block; margin-bottom:10px; line-height:1}
+
+/* ── الخطوات ── */
+ol.steps{counter-reset:s; list-style:none; padding:0; margin:0; display:grid; gap:12px}
+ol.steps li{
+  counter-increment:s; position:relative;
+  background:var(--card); border:1px solid var(--line);
+  border-radius:12px; padding:16px 62px 16px 20px; font-size:15.5px;
+}
+ol.steps li::before{
+  content:counter(s); position:absolute; right:18px; top:15px;
+  width:28px; height:28px; border-radius:50%; background:var(--accent);
+  color:#fff; font-size:14px; font-weight:700;
+  display:grid; place-items:center;
+}
+ol.steps b{font-weight:600}
+.note{
+  margin-top:16px; padding:15px 18px; border-radius:12px; font-size:14.5px;
+  background:rgba(59,130,246,.09); border:1px solid rgba(59,130,246,.28); color:var(--dim);
+}
+
+/* ── الجدول ── */
+table{width:100%; border-collapse:collapse; font-size:15px;
+  background:var(--card); border:1px solid var(--line); border-radius:var(--radius); overflow:hidden}
+th,td{padding:13px 18px; text-align:right; border-bottom:1px solid var(--line)}
+th{background:var(--bg2); font-weight:600; font-size:14.5px}
+tr:last-child td{border-bottom:none}
+td.st{color:var(--dim); font-size:14.5px}
+.yes{color:var(--ok); font-weight:600}
+
+/* ── الذيل ── */
+footer{border-top:1px solid var(--line); padding:38px 0 52px; color:var(--faint); font-size:14.5px}
+footer p{margin:0 0 9px}
+code{
+  font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:13.5px;
+  background:var(--bg2); border:1px solid var(--line); border-radius:6px; padding:2px 7px;
+  direction:ltr; display:inline-block;
+}
+@media(max-width:640px){
+  h1{font-size:34px} .tag{font-size:17.5px} body{font-size:16px}
+  .appicon{width:92px;height:92px}
+}
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="wrap">
+    <img class="appicon" src="icon.png" alt="أيقونة الماسح">
+    <h1>الماسح</h1>
+    <p class="tag">شغّل الماسح الضوئي في طابعة Canon PIXMA من الماك — بدون برامج كانون.</p>
+    <p class="sub">كانون لا توفّر تعريف ماسح ضوئي لنظام macOS، فتبقى الطابعة تطبع ولا تمسح. هذا التطبيق يحل المشكلة.</p>
+    <div class="cta">
+      <a class="btn" href="https://github.com/aldoraibi/maseh/releases/latest/download/Maseh.zip">تحميل مجاني</a>
+      <a class="btn ghost" href="https://github.com/aldoraibi/maseh">الكود المصدري</a>
+    </div>
+    <p class="req">macOS 14 فأحدث · معالج Apple Silicon · مفتوح المصدر برخصة MIT</p>
+  </div>
+</header>
+
+<div class="shotwrap">
+  <img class="shot" src="screenshot.png" alt="واجهة التطبيق في شريط القوائم">
+</div>
+
+<section>
+  <div class="wrap">
+    <h2>ماذا يفعل</h2>
+    <p class="lead">يسكن في شريط القوائم، ويفتح بضغطة واحدة.</p>
+    <div class="grid">
+      <div class="card"><span class="ico">📄</span>
+        <h3>مسح متعدد الصفحات</h3>
+        <p>امسح ورقة بعد ورقة وتُجمع كلها في ملف PDF واحد، مع معاينة كل صفحة وتدويرها أو حذفها قبل الحفظ.</p></div>
+      <div class="card"><span class="ico">🔍</span>
+        <h3>PDF قابل للبحث</h3>
+        <p>استخراج النص العربي من الورقة الممسوحة عبر محرك التعرّف الضوئي المدمج في macOS، فتقدر تبحث داخل الملف وتنسخ منه.</p></div>
+      <div class="card"><span class="ico">🖨️</span>
+        <h3>تصوير مستندات</h3>
+        <p>مسح ثم طباعة مباشرة، فتتحول الطابعة إلى آلة تصوير. وتقدر تطبع أي ملف PDF أو صورة من جهازك.</p></div>
+      <div class="card"><span class="ico">🖼️</span>
+        <h3>طباعة من مكتبة الصور</h3>
+        <p>تصفّح صور الماك داخل التطبيق واختر ما تريد طباعته، بلا تصدير ولا حفظ مؤقت.</p></div>
+      <div class="card"><span class="ico">📐</span>
+        <h3>قوالب جاهزة</h3>
+        <p>صورتان أو ٤ أو ٦ أو ٩ في الصفحة، وورقة صور شخصية بمقاس ٤×٦ سم أو ٣٥×٤٥ مم مع خطوط قص.</p></div>
+      <div class="card"><span class="ico">⚙️</span>
+        <h3>خيارات الطابعة كاملة</h3>
+        <p>نوع الورق والجودة والمقاس والطباعة بلا حدود — مقروءة من ملف تعريف طابعتك ومعروضة بالعربية.</p></div>
+      <div class="card"><span class="ico">📊</span>
+        <h3>متابعة الطباعة</h3>
+        <p>طابور مباشر يعرض المهمة قيد الطباعة وما ينتظر دوره، مع إمكانية إلغاء أي مهمة.</p></div>
+      <div class="card"><span class="ico">🔒</span>
+        <h3>لا يتصل بالإنترنت</h3>
+        <p>كل شيء يحدث على جهازك وشبكتك المحلية. لا حسابات، لا تتبّع، ولا بيانات تغادر جهازك.</p></div>
+    </div>
+  </div>
+</section>
+
+<section style="background:var(--bg2); border-block:1px solid var(--line)">
+  <div class="wrap">
+    <h2>التركيب</h2>
+    <p class="lead">أقل من دقيقة.</p>
+    <ol class="steps">
+      <li>نزّل <b>Maseh.zip</b> وفكّ الضغط، وانقل <b>الماسح.app</b> إلى مجلد التطبيقات.</li>
+      <li>أول تشغيل: اضغط على التطبيق بزر الفأرة الأيمن ← <b>فتح</b> ← <b>فتح</b>. التطبيق غير موقّع من Apple، وهذه الخطوة مرة واحدة فقط.</li>
+      <li>اسمح بإذن <b>الشبكة المحلية</b> حين يطلبه النظام. بدونه لن يصل التطبيق إلى الطابعة.</li>
+      <li>تظهر أيقونة الماسح في شريط القوائم. ضع الورقة واضغط <b>مسح صفحة</b>.</li>
+    </ol>
+    <p class="note">لم يظهر طلب الإذن؟ فعّله يدوياً من <b>إعدادات النظام ← الخصوصية والأمان ← الشبكة المحلية</b>، ثم فعّل «الماسح».</p>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2>الطابعات المدعومة</h2>
+    <p class="lead">المسح الضوئي يعمل مع طابعات Canon PIXMA G-series. أما الطباعة فتعمل مع أي طابعة مضافة في الماك.</p>
+    <table>
+      <tr><th>الطابعة</th><th>حالة المسح الضوئي</th></tr>
+      <tr><td>Canon PIXMA G3010</td><td class="st"><span class="yes">مختبرة ✓</span></td></tr>
+      <tr><td>Canon PIXMA G2010 · G2020 · G3020 · G4010</td><td class="st">غالباً تعمل — نفس البروتوكول، غير مختبرة</td></tr>
+      <tr><td>بقية سلسلة Canon PIXMA G</td><td class="st">محتملة</td></tr>
+      <tr><td>طابعات كانون التي تدعم eSCL</td><td class="st">لا تحتاج التطبيق — الماك يراها أصلاً</td></tr>
+      <tr><td>العلامات الأخرى</td><td class="st">المسح لا يعمل · الطباعة تعمل</td></tr>
+    </table>
+    <p class="note">الشرط التقني: أن تُعلن الطابعة خدمة <code>_ipp._tcp</code> مع الخاصية <code>Scan=T</code>، وأن تتكلم بروتوكول <code>CHMP</code> على المنفذ 80.</p>
+  </div>
+</section>
+
+<section style="background:var(--bg2); border-block:1px solid var(--line)">
+  <div class="wrap">
+    <h2>لماذا احتاج الأمر تطبيقاً أصلاً</h2>
+    <p class="lead" style="max-width:720px">
+      ماك يتحدث إلى الماسحات الضوئية ببروتوكول قياسي اسمه <code>eSCL</code>، وطابعات
+      Canon PIXMA G-series لا تفهمه. هي تستخدم بروتوكول كانون الخاص <code>CHMP</code>،
+      وكانون لم تُصدر له تعريفاً لنظام macOS. لذلك لا يظهر الماسح في «التقاط الصور» إطلاقاً.
+      <br><br>
+      مشروع <a href="https://github.com/pdrgds/pixma-rs">pixma-rs</a> فكّ هذا البروتوكول
+      بالهندسة العكسية، وهذا التطبيق يبني فوقه واجهة عربية كاملة للمسح والطباعة.
+    </p>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <p>الشكر لمشروع <a href="https://github.com/pdrgds/pixma-rs">pixma-rs</a> على فكّ بروتوكول كانون — هذا هو الجزء الصعب.</p>
+    <p>التعرّف الضوئي على النصوص عبر إطار Vision من Apple.</p>
+    <p>مفتوح المصدر برخصة MIT · <a href="https://github.com/aldoraibi/maseh">GitHub</a> · <a href="https://x.com/ALDoraibi">‎@ALDoraibi</a></p>
+  </div>
+</footer>
+
+</body>
+</html>
