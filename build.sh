@@ -7,6 +7,7 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 BUILD="$HERE/.build"
 APP="$HOME/Applications/الماسح.app"
 PIXMA_REPO="https://github.com/pdrgds/pixma-rs.git"
+PIXMA_REF="b9be726b002a0c1720c9928f3012b505bdb5ad1c"   # إصدار مثبّت من pixma-rs
 
 command -v swiftc >/dev/null || { echo "✗ أدوات Xcode غير مثبتة: xcode-select --install"; exit 1; }
 command -v cargo  >/dev/null || { echo "✗ Rust غير مثبت: https://rustup.rs"; exit 1; }
@@ -16,8 +17,9 @@ mkdir -p "$BUILD"
 # ── 1. محرك المسح (pixma-rs) ──
 if [ ! -d "$BUILD/pixma-rs" ]; then
   echo "▸ جلب محرك المسح pixma-rs…"
-  git clone --depth 1 "$PIXMA_REPO" "$BUILD/pixma-rs"
+  git clone "$PIXMA_REPO" "$BUILD/pixma-rs"
 fi
+( cd "$BUILD/pixma-rs" && git fetch -q origin && git checkout -q "$PIXMA_REF" )
 echo "▸ بناء محرك المسح…"
 ( cd "$BUILD/pixma-rs" && cargo build --release -p pixma-cli )
 
@@ -30,7 +32,8 @@ iconutil -c icns "$BUILD/Icon.iconset" -o "$BUILD/AppIcon.icns"
 
 # ── 3. التطبيق ──
 echo "▸ بناء التطبيق…"
-swiftc -O -parse-as-library -target arm64-apple-macos14.0 \
+ARCH="$(uname -m)"
+swiftc -O -parse-as-library -target "${ARCH}-apple-macos14.0" \
   "$HERE/src/ScannerApp.swift" \
   "$HERE/src/PhotosPicker.swift" \
   "$HERE/src/Queue.swift" \

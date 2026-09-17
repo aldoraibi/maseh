@@ -49,6 +49,7 @@ final class PhotoLib: ObservableObject {
         opts.deliveryMode = .highQualityFormat
 
         var urls: [URL] = []
+        let lock = NSLock()
         let group = DispatchGroup()
         for a in chosen {
             group.enter()
@@ -60,7 +61,9 @@ final class PhotoLib: ObservableObject {
                 else if let uti, uti.contains("heic") { ext = "heic" }
                 let u = FileManager.default.temporaryDirectory
                     .appendingPathComponent("lib_\(UUID().uuidString).\(ext)")
-                if (try? data.write(to: u)) != nil { urls.append(u) }
+                if (try? data.write(to: u)) != nil {
+                    lock.lock(); urls.append(u); lock.unlock()
+                }
             }
         }
 
@@ -69,7 +72,7 @@ final class PhotoLib: ObservableObject {
             guard !urls.isEmpty else { self.note = "تعذّر تحضير الصور"; return }
             self.note = ""
             self.selected.removeAll()
-            Model.shared.printPhotoURLs(urls)
+            Model.shared.printPhotoURLs(urls, deleteSources: true)
             NSApp.keyWindow?.close()
         }
     }
@@ -78,6 +81,7 @@ final class PhotoLib: ObservableObject {
 struct PhotoGrid: View {
     @ObservedObject var lib = PhotoLib.shared
     @ObservedObject var m = Model.shared
+    @ObservedObject var q = PrintQueue.shared
     @Environment(\.openWindow) private var openWindow
 
     private let cols = [GridItem(.adaptive(minimum: 104), spacing: 8)]
@@ -159,9 +163,10 @@ struct PhotoGrid: View {
         .frame(minWidth: 640, minHeight: 460)
         .environment(\.layoutDirection, .rightToLeft)
         .safeAreaInset(edge: .top) {
-            if !PrintQueue.shared.jobs.isEmpty { QueueBlock() }
+            if !q.jobs.isEmpty { QueueBlock() }
         }
-        .onAppear { lib.load(); m.loadQueues(); PrintQueue.shared.start() }
+        .onAppear { lib.load(); m.loadQueues(); q.start() }
+        .onDisappear { q.stop() }
     }
 }
 

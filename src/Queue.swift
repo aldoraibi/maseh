@@ -45,21 +45,33 @@ final class PrintQueue: ObservableObject {
         p.arguments = args
         let pipe = Pipe()
         p.standardOutput = pipe
-        p.standardError = Pipe()
+        p.standardError = FileHandle.nullDevice
         do { try p.run() } catch { return "" }
+        let out = String(data: pipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
         p.waitUntilExit()
-        return String(data: pipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+        return out
     }
 
     // مخرجات أوامر CUPS مترجمة حسب لغة النظام، لذلك نعتمد على رقم المهمة
     // بصيغة (اسم_الطابور-رقم) وهو غير مترجم في أي لغة.
+    private var polling = false
+
     func poll() {
         let q = Model.shared.queue
         guard !q.isEmpty else { jobs = []; state = ""; return }
+        guard !polling else { return }
+        polling = true
+        let known = titles
+        Task.detached(priority: .utility) {
+            let out = PrintQueue.shell("/usr/bin/lpstat", ["-W", "not-completed", "-o", q])
+            let active = PrintQueue.shell("/usr/bin/lpstat", ["-p", q])
+            let list = PrintQueue.parse(queue: q, out: out, active: active, titles: known)
+            await MainActor.run { self.apply(list) }
+        }
+    }
 
-        let out = PrintQueue.shell("/usr/bin/lpstat", ["-W", "not-completed", "-o", q])
-        let active = PrintQueue.shell("/usr/bin/lpstat", ["-p", q])
-
+    nonisolated static func parse(queue q: String, out: String, active: String,
+                                  titles: [String: String]) -> [Job] {
         var list: [Job] = []
         for raw in out.split(separator: "\n") {
             let line = String(raw).trimmingCharacters(in: .whitespaces)
@@ -76,7 +88,11 @@ final class PrintQueue: ObservableObject {
                             rank: active.contains(id) ? "قيد الطباعة" : "في الانتظار",
                             size: kb))
         }
+        return list
+    }
 
+    private func apply(_ list: [Job]) {
+        polling = false
         jobs = list
 
         if list.isEmpty {

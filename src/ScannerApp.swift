@@ -41,26 +41,60 @@ final class Model: ObservableObject {
     @Published var status = ""
     @Published var progress = false
 
-    @AppStorage("printerIP") var printerIP: String = ""
-    @AppStorage("dpi") var dpi: Int = 300
-    @AppStorage("colorMode") var colorMode: String = "color"
-    @AppStorage("ocr") var ocr: Bool = true
-    @AppStorage("lastDir") var lastDir: String = ""
-    @AppStorage("queue") var queue: String = ""
-    @AppStorage("copies") var copies: Int = 1
-    @AppStorage("photoPaper") var photoPaper: String = "A4"
-    @AppStorage("photoFill") var photoFill: Bool = false
-    @AppStorage("layout") var layout: String = "one"
+    @Published var printerIP: String = "" {
+        didSet { UserDefaults.standard.set(printerIP, forKey: "printerIP") }
+    }
+    @Published var dpi: Int = 300 {
+        didSet { UserDefaults.standard.set(dpi, forKey: "dpi") }
+    }
+    @Published var colorMode: String = "color" {
+        didSet { UserDefaults.standard.set(colorMode, forKey: "colorMode") }
+    }
+    @Published var ocr: Bool = true {
+        didSet { UserDefaults.standard.set(ocr, forKey: "ocr") }
+    }
+    @Published var lastDir: String = "" {
+        didSet { UserDefaults.standard.set(lastDir, forKey: "lastDir") }
+    }
+    @Published var queue: String = "" {
+        didSet { UserDefaults.standard.set(queue, forKey: "queue") }
+    }
+    @Published var copies: Int = 1 {
+        didSet { UserDefaults.standard.set(copies, forKey: "copies") }
+    }
+    @Published var photoPaper: String = "A4" {
+        didSet { UserDefaults.standard.set(photoPaper, forKey: "photoPaper") }
+    }
+    @Published var photoFill: Bool = false {
+        didSet { UserDefaults.standard.set(photoFill, forKey: "photoFill") }
+    }
+    @Published var layout: String = "one" {
+        didSet { UserDefaults.standard.set(layout, forKey: "layout") }
+    }
     @Published var queues: [String] = []
+
+    private init() {
+        let d = UserDefaults.standard
+        if let v = d.string(forKey: "printerIP") { printerIP = v }
+        if d.object(forKey: "dpi") != nil { dpi = d.integer(forKey: "dpi") }
+        if let v = d.string(forKey: "colorMode") { colorMode = v }
+        if d.object(forKey: "ocr") != nil { ocr = d.bool(forKey: "ocr") }
+        if let v = d.string(forKey: "lastDir") { lastDir = v }
+        if let v = d.string(forKey: "queue") { queue = v }
+        if d.object(forKey: "copies") != nil { copies = max(1, d.integer(forKey: "copies")) }
+        if let v = d.string(forKey: "photoPaper") { photoPaper = v }
+        if d.object(forKey: "photoFill") != nil { photoFill = d.bool(forKey: "photoFill") }
+        if let v = d.string(forKey: "layout") { layout = v }
+    }
 
     func loadQueues() {
         let p = Process()
         p.executableURL = URL(fileURLWithPath: "/usr/bin/lpstat")
         p.arguments = ["-e"]
-        let pipe = Pipe(); p.standardOutput = pipe; p.standardError = Pipe()
+        let pipe = Pipe(); p.standardOutput = pipe; p.standardError = FileHandle.nullDevice
         do { try p.run() } catch { return }
-        p.waitUntilExit()
         let out = String(data: pipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+        p.waitUntilExit()
         let found = out.split(separator: "\n").map(String.init).filter { !$0.isEmpty }
         queues = found
         if queue.isEmpty || !found.contains(queue) {
@@ -79,15 +113,13 @@ final class Model: ObservableObject {
         guard panel.runModal() == .OK, !panel.urls.isEmpty else { return }
         let urls = panel.urls
 
-        if urls.allSatisfy({ $0.pathExtension.lowercased() == "pdf" }) {
-            for u in urls { send(u, cleanup: false) }
-            return
-        }
-
-        printPhotoURLs(urls)
+        let pdfs = urls.filter { $0.pathExtension.lowercased() == "pdf" }
+        let images = urls.filter { $0.pathExtension.lowercased() != "pdf" }
+        for u in pdfs { send(u, cleanup: false) }
+        if !images.isEmpty { printPhotoURLs(images, deleteSources: false) }
     }
 
-    func printPhotoURLs(_ urls: [URL]) {
+    func printPhotoURLs(_ urls: [URL], deleteSources: Bool = false) {
         guard !urls.isEmpty else { return }
         busy = true; progress = true
         status = "جاري تجهيز الصور…"
@@ -96,14 +128,18 @@ final class Model: ObservableObject {
             .appendingPathComponent("photos_\(UUID().uuidString).pdf")
         Task.detached(priority: .userInitiated) {
             let ok = buildPhotoPDF(urls: urls, paper: paper, fill: fill, layout: lay, to: tmp)
-            for u in urls where u.lastPathComponent.hasPrefix("lib_") {
-                try? FileManager.default.removeItem(at: u)
+            if deleteSources {
+                let tmpDir = FileManager.default.temporaryDirectory.standardizedFileURL.path
+                for u in urls where u.standardizedFileURL.path.hasPrefix(tmpDir) {
+                    try? FileManager.default.removeItem(at: u)
+                }
             }
             await MainActor.run {
                 self.busy = false; self.progress = false
                 if ok {
                     self.send(tmp, cleanup: true)
                 } else {
+                    try? FileManager.default.removeItem(at: tmp)
                     self.status = "تعذّر تجهيز الصور"
                 }
             }
@@ -125,6 +161,7 @@ final class Model: ObservableObject {
                 if ok {
                     self.send(tmp, cleanup: true)
                 } else {
+                    try? FileManager.default.removeItem(at: tmp)
                     self.status = "تعذّر التجهيز"
                 }
             }
@@ -133,6 +170,7 @@ final class Model: ObservableObject {
 
     func send(_ url: URL, cleanup: Bool) {
         guard !queue.isEmpty else {
+            if cleanup { try? FileManager.default.removeItem(at: url) }
             status = "لم تُحدَّد طابعة"
             return
         }
@@ -143,9 +181,10 @@ final class Model: ObservableObject {
         args.append(url.path)
         p.arguments = args
         let outPipe = Pipe()
-        p.standardOutput = outPipe; p.standardError = Pipe()
+        p.standardOutput = outPipe; p.standardError = FileHandle.nullDevice
         p.environment = ["LANG": "C", "LC_ALL": "C", "PATH": "/usr/bin:/bin"]
         do { try p.run() } catch {
+            if cleanup { try? FileManager.default.removeItem(at: url) }
             status = "تعذّر إرسال الطباعة"
             return
         }
@@ -170,9 +209,7 @@ final class Model: ObservableObject {
 
 
     private var pixmaURL: URL? {
-        if let u = Bundle.main.url(forResource: "pixma", withExtension: nil) { return u }
-        let fallback = URL(fileURLWithPath: NSHomeDirectory() + "/pixma-src/target/release/pixma")
-        return FileManager.default.isExecutableFile(atPath: fallback.path) ? fallback : nil
+        Bundle.main.url(forResource: "pixma", withExtension: nil)
     }
 
     private var browser: NWBrowser?
@@ -188,6 +225,10 @@ final class Model: ObservableObject {
         b.browseResultsChangedHandler = { _, _ in }
         b.start(queue: .main)
         browser = b
+        DispatchQueue.main.asyncAfter(deadline: .now() + 15) { [weak self] in
+            self?.browser?.cancel()
+            self?.browser = nil
+        }
 
         // اتصال مباشر بالطابعة يضمن ظهور الطلب ويثبّت هوية التطبيق كعميل شبكة
         if !printerIP.isEmpty, let u = URL(string: "http://\(printerIP)/") {
@@ -213,7 +254,7 @@ final class Model: ObservableObject {
             p.arguments = a
             let errPipe = Pipe()
             p.standardError = errPipe
-            p.standardOutput = Pipe()
+            p.standardOutput = FileHandle.nullDevice
             var failure: String? = nil
             do {
                 try p.run()
@@ -498,19 +539,21 @@ func buildPhotoPDF(urls: [URL], paper: String, fill: Bool, layout: String, to ur
 
 func recognize(_ img: CGImage) async -> [(String, CGRect)] {
     await withCheckedContinuation { cont in
-        let req = VNRecognizeTextRequest { request, _ in
-            let obs = (request.results as? [VNRecognizedTextObservation]) ?? []
-            cont.resume(returning: obs.compactMap { o in
-                guard let c = o.topCandidates(1).first else { return nil }
-                return (c.string, o.boundingBox)
-            })
-        }
-        req.recognitionLevel = .accurate
-        req.recognitionLanguages = ["ar-SA", "en-US"]
-        req.usesLanguageCorrection = true
-        let handler = VNImageRequestHandler(cgImage: img, options: [:])
         DispatchQueue.global(qos: .userInitiated).async {
-            do { try handler.perform([req]) } catch { cont.resume(returning: []) }
+            let req = VNRecognizeTextRequest()
+            req.recognitionLevel = .accurate
+            req.recognitionLanguages = ["ar-SA", "en-US"]
+            req.usesLanguageCorrection = true
+            let handler = VNImageRequestHandler(cgImage: img, options: [:])
+            var found: [(String, CGRect)] = []
+            if (try? handler.perform([req])) != nil {
+                let obs = (req.results as? [VNRecognizedTextObservation]) ?? []
+                found = obs.compactMap { o in
+                    guard let c = o.topCandidates(1).first else { return nil }
+                    return (c.string, o.boundingBox)
+                }
+            }
+            cont.resume(returning: found)
         }
     }
 }

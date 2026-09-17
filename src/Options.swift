@@ -75,7 +75,6 @@ func parsePPD(queue: String) -> [PPDOption] {
     var options: [PPDOption] = []
     var key = ""
     var label = ""
-    var def = ""
     var choices: [PPDChoice] = []
     var defaults: [String: String] = [:]
 
@@ -99,7 +98,6 @@ func parsePPD(queue: String) -> [PPDOption] {
             let parts = head.split(separator: "/", maxSplits: 1).map(String.init)
             key = parts.first ?? ""
             label = parts.count > 1 ? parts[1] : key
-            def = ""
             choices = []
             continue
         }
@@ -108,7 +106,7 @@ func parsePPD(queue: String) -> [PPDOption] {
             if !key.isEmpty, wantedKeys.contains(key), choices.count > 1 {
                 options.append(PPDOption(id: key,
                                          name: arabicKeyNames[key] ?? label,
-                                         def: defaults[key] ?? def,
+                                         def: defaults[key] ?? choices[0].id,
                                          choices: choices))
             }
             key = ""; choices = []
@@ -156,7 +154,7 @@ func parseLpoptions(queue: String) -> [PPDOption] {
         if choices.count > 1 {
             options.append(PPDOption(id: key,
                                      name: arabicKeyNames[key] ?? label,
-                                     def: def,
+                                     def: def.isEmpty ? choices[0].id : def,
                                      choices: choices))
         }
     }
