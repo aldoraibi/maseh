@@ -245,51 +245,28 @@ final class Model: ObservableObject {
         let ip = printerIP, res = String(dpi), mode = colorMode
 
         Task.detached(priority: .userInitiated) {
-            let tmp = FileManager.default.temporaryDirectory
-                .appendingPathComponent("scan_\(UUID().uuidString).png")
-            let p = Process()
-            p.executableURL = exe
-            var a = ["scan", tmp.path, "--resolution", res, "--color", mode]
-            if !ip.isEmpty { a.append(contentsOf: ["--device", ip]) }
-            p.arguments = a
-            let errPipe = Pipe()
-            p.standardError = errPipe
-            p.standardOutput = FileHandle.nullDevice
-            var failure: String? = nil
-            do {
-                try p.run()
-                let errData = errPipe.fileHandleForReading.readDataToEndOfFile()
-                p.waitUntilExit()
-                if p.terminationStatus != 0 {
-                    let text = String(data: errData, encoding: .utf8) ?? ""
-                    let last = text.split(separator: "\n")
-                        .map { $0.trimmingCharacters(in: .whitespaces) }
-                        .last(where: { !$0.isEmpty }) ?? ""
-                    if last.lowercased().contains("permission")
-                        || last.lowercased().contains("not permitted")
-                        || last.lowercased().contains("no route")
-                        || last.lowercased().contains("timed out")
-                        || last.lowercased().contains("refused") {
-                        failure = "الشبكة المحلية محجوبة — فعّلها من إعدادات النظام"
-                    } else if last.isEmpty {
-                        failure = "تعذّر الاتصال بالماسح"
-                    } else {
-                        failure = String(last.prefix(70))
-                    }
-                }
-            } catch {
-                failure = "تعذّر تشغيل محرك المسح"
-            }
-
             var made: CGImage? = nil
-            if failure == nil,
-               let src = CGImageSourceCreateWithURL(tmp as CFURL, nil),
-               let img = CGImageSourceCreateImageAtIndex(src, 0, nil) {
-                made = img
-            } else if failure == nil {
-                failure = "تعذّرت قراءة الصورة الممسوحة"
+            var failure: String? = nil
+            // بعض الطابعات تُرجع مسحة سوداء تماماً إذا لم يسخن مصباح الماسح بعد،
+            // أو عند تصادم جلستَي مسح. نرفض المسحة السوداء ونعيد المحاولة مرة واحدة.
+            for attempt in 0..<2 {
+                let r = Model.scanOnce(exe: exe, ip: ip, res: res, mode: mode)
+                if let img = r.image {
+                    if Model.isBlank(img) {
+                        if attempt == 0 {
+                            await MainActor.run { self.status = "المسحة سوداء… إعادة المحاولة" }
+                            try? await Task.sleep(nanoseconds: 1_500_000_000)
+                            continue
+                        }
+                        failure = "خرجت الصفحة سوداء — تأكد من وجود ورقة على الزجاج وإغلاق الغطاء، ثم أعد المسح"
+                    } else {
+                        made = img
+                    }
+                } else {
+                    failure = r.error
+                }
+                break
             }
-            try? FileManager.default.removeItem(at: tmp)
 
             await MainActor.run {
                 self.busy = false; self.progress = false
@@ -301,6 +278,73 @@ final class Model: ObservableObject {
                 }
             }
         }
+    }
+
+    /// مسحة واحدة عبر محرك pixma؛ تُرجع الصورة أو رسالة خطأ.
+    nonisolated static func scanOnce(exe: URL, ip: String, res: String, mode: String) -> (image: CGImage?, error: String?) {
+        let tmp = FileManager.default.temporaryDirectory
+            .appendingPathComponent("scan_\(UUID().uuidString).png")
+        defer { try? FileManager.default.removeItem(at: tmp) }
+        let p = Process()
+        p.executableURL = exe
+        var a = ["scan", tmp.path, "--resolution", res, "--color", mode]
+        if !ip.isEmpty { a.append(contentsOf: ["--device", ip]) }
+        p.arguments = a
+        let errPipe = Pipe()
+        p.standardError = errPipe
+        p.standardOutput = FileHandle.nullDevice
+        do {
+            try p.run()
+            let errData = errPipe.fileHandleForReading.readDataToEndOfFile()
+            p.waitUntilExit()
+            if p.terminationStatus != 0 {
+                let text = String(data: errData, encoding: .utf8) ?? ""
+                let last = text.split(separator: "\n")
+                    .map { $0.trimmingCharacters(in: .whitespaces) }
+                    .last(where: { !$0.isEmpty }) ?? ""
+                let l = last.lowercased()
+                if l.contains("no canon") || l.contains("not found") {
+                    return (nil, "لم يُعثر على الطابعة على هذه الشبكة")
+                } else if l.contains("permission") || l.contains("not permitted") {
+                    return (nil, "الشبكة المحلية محجوبة — فعّلها من إعدادات النظام")
+                } else if l.contains("no route") || l.contains("timed out") || l.contains("refused") {
+                    return (nil, "الطابعة لا تستجيب — تأكد أنها متصلة بنفس الشبكة")
+                } else if last.isEmpty {
+                    return (nil, "تعذّر الاتصال بالماسح")
+                }
+                return (nil, String(last.prefix(70)))
+            }
+        } catch {
+            return (nil, "تعذّر تشغيل محرك المسح")
+        }
+        guard let src = CGImageSourceCreateWithURL(tmp as CFURL, nil),
+              let img = CGImageSourceCreateImageAtIndex(src, 0,
+                        [kCGImageSourceShouldCacheImmediately: true] as CFDictionary) else {
+            return (nil, "تعذّرت قراءة الصورة الممسوحة")
+        }
+        return (img, nil)
+    }
+
+    /// هل الصورة سوداء فعلياً (مسحة فاشلة)؟ عيّنة من السطوع.
+    nonisolated static func isBlank(_ img: CGImage) -> Bool {
+        let w = img.width, h = img.height
+        guard w > 0, h > 0,
+              let ctx = CGContext(data: nil, width: w, height: h, bitsPerComponent: 8,
+                                  bytesPerRow: 0, space: CGColorSpaceCreateDeviceRGB(),
+                                  bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)
+        else { return false }
+        ctx.draw(img, in: CGRect(x: 0, y: 0, width: w, height: h))
+        guard let data = ctx.data else { return false }
+        let px = data.assumingMemoryBound(to: UInt8.self)
+        var sum = 0, n = 0
+        let sx = max(1, w / 40), sy = max(1, h / 40)
+        for y in stride(from: 0, to: h, by: sy) {
+            for x in stride(from: 0, to: w, by: sx) {
+                let i = y * ctx.bytesPerRow + x * 4
+                sum += (Int(px[i]) + Int(px[i + 1]) + Int(px[i + 2])) / 3; n += 1
+            }
+        }
+        return n > 0 && (sum / n) < 8   // متوسط السطوع < 8 من 255 = سوداء
     }
 
     func rotate(_ id: UUID) {
