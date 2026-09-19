@@ -4,6 +4,7 @@ import Vision
 import Network
 import CoreText
 import UniformTypeIdentifiers
+import UserNotifications
 
 // ───────────────────────── الطراز ─────────────────────────
 
@@ -1104,6 +1105,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         Model.shared.loadQueues()
         Model.shared.primeLocalNetwork()
         Model.shared.discoverPrinters(auto: true)
+        UNUserNotificationCenter.current()
+            .requestAuthorization(options: [.alert, .sound]) { _, _ in }
+    }
+}
+
+struct MenuLabel: View {
+    @ObservedObject var q = PrintQueue.shared
+    var body: some View {
+        Image(systemName: q.paused ? "exclamationmark.triangle.fill" : "scanner")
     }
 }
 
@@ -1114,7 +1124,7 @@ struct ScannerApp: App {
         MenuBarExtra {
             Panel()
         } label: {
-            Image(systemName: "scanner")
+            MenuLabel()
         }
         .menuBarExtraStyle(.window)
 
