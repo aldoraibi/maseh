@@ -72,6 +72,7 @@ final class Model: ObservableObject {
         didSet { UserDefaults.standard.set(layout, forKey: "layout") }
     }
     @Published var queues: [String] = []
+    @Published var discovering = false
 
     private init() {
         let d = UserDefaults.standard
@@ -101,6 +102,98 @@ final class Model: ObservableObject {
             queue = found.first(where: { $0.lowercased().contains("canon") }) ?? found.first ?? ""
         }
         PrintOptions.shared.load()
+    }
+
+    // ─────────────── اكتشاف الطابعات على الشبكة ───────────────
+
+    struct FoundPrinter { let name: String; let uuid: String; let uri: String }
+
+    /// خريطة كل طابور طباعة إلى معرّف جهازه (uuid) من إعدادات النظام.
+    /// سطر lpstat -v: «جهاز لـ QUEUE: dnssd://…uuid=XXXX». نفصل عند أول «:».
+    nonisolated static func queueUUIDs() -> [(queue: String, uuid: String)] {
+        let out = PrintQueue.shell("/usr/bin/lpstat", ["-v"])
+        var result: [(String, String)] = []
+        for raw in out.split(separator: "\n") {
+            let line = String(raw)
+            guard let colon = line.firstIndex(of: ":") else { continue }
+            let left = String(line[line.startIndex..<colon])
+            let right = String(line[line.index(after: colon)...])
+            guard let q = left.split(separator: " ").last.map(String.init) else { continue }
+            // استخراج uuid=… من رابط الجهاز
+            guard let r = right.range(of: "uuid=", options: .caseInsensitive) else { continue }
+            let tail = right[r.upperBound...]
+            let uuid = String(tail.prefix { $0.isHexDigit || $0 == "-" })
+            guard !uuid.isEmpty else { continue }
+            result.append((q, uuid))
+        }
+        return result
+    }
+
+    /// تشغيل أمر مع مهلة قصوى (شبكة الاكتشاف قد تتأخر).
+    nonisolated static func shellTimeout(_ path: String, _ args: [String], seconds: Double) -> String {
+        let p = Process()
+        p.executableURL = URL(fileURLWithPath: path)
+        p.arguments = args
+        let pipe = Pipe()
+        p.standardOutput = pipe
+        p.standardError = FileHandle.nullDevice
+        do { try p.run() } catch { return "" }
+        DispatchQueue.global().asyncAfter(deadline: .now() + seconds) {
+            if p.isRunning { p.terminate() }
+        }
+        let data = pipe.fileHandleForReading.readDataToEndOfFile()
+        p.waitUntilExit()
+        return String(data: data, encoding: .utf8) ?? ""
+    }
+
+    /// يبحث عن الطابعات المتصلة فعلاً عبر Bonjour، ويختار الطابور المطابق تلقائياً.
+    func discoverPrinters(auto: Bool = false) {
+        guard !discovering else { return }
+        discovering = true
+        if !auto { status = "جاري البحث عن الطابعات…" }
+        let currentQueue = queue
+        Task.detached(priority: .userInitiated) {
+            let raw = Model.shellTimeout(
+                "/usr/bin/ippfind",
+                ["_ipps._tcp", "_ipp._tcp",
+                 "--exec", "echo", "{service_name}\t{txt_uuid}\t{}", ";"],
+                seconds: 6)
+
+            var online: [FoundPrinter] = []
+            for line in raw.split(separator: "\n") {
+                let f = String(line).components(separatedBy: "\t")
+                guard f.count >= 3 else { continue }
+                let uuid = f[1].trimmingCharacters(in: .whitespaces).lowercased()
+                guard !uuid.isEmpty else { continue }
+                online.append(FoundPrinter(name: f[0], uuid: uuid, uri: f[2]))
+            }
+            let onlineUUIDs = Set(online.map { $0.uuid })
+            let map = Model.queueUUIDs()
+            let matching = map.filter { onlineUUIDs.contains($0.uuid.lowercased()) }
+
+            // فضّل الطابور الحالي إن كان متصلاً، ثم كانون، ثم أي متصل
+            var chosen: String? = matching.first(where: { $0.queue == currentQueue })?.queue
+            if chosen == nil {
+                chosen = matching.first(where: { $0.queue.lowercased().contains("canon") })?.queue
+                    ?? matching.first?.queue
+            }
+
+            await MainActor.run {
+                self.discovering = false
+                self.loadQueues()
+                if let c = chosen {
+                    if self.queue != c {
+                        self.queue = c
+                        PrintOptions.shared.load(force: true)
+                    }
+                    self.status = "الطابعة المتصلة: \(c)"
+                } else if !online.isEmpty {
+                    self.status = "عُثر على طابعة غير مُضافة في النظام — أضِفها من «طابعات وماسحات»"
+                } else if !auto {
+                    self.status = "لم يُعثر على طابعة متصلة على هذه الشبكة"
+                }
+            }
+        }
     }
 
     func printFile() {
@@ -625,7 +718,12 @@ struct Panel: View {
             footer
         }
         .frame(width: 380)
-        .onAppear { m.loadQueues(); q.start(); m.primeLocalNetwork() }
+        .onAppear {
+            m.loadQueues()
+            m.primeLocalNetwork()
+            m.discoverPrinters(auto: true)
+            q.start()
+        }
         .onDisappear { q.stop() }
         .environment(\.layoutDirection, .rightToLeft)
     }
@@ -840,7 +938,22 @@ struct Panel: View {
                     ForEach(m.queues, id: \.self) { q in Text(q).tag(q) }
                 }
                 .labelsHidden().frame(width: 165)
+                .onChange(of: m.queue) { _, _ in PrintOptions.shared.load(force: true) }
             }
+            Button { m.discoverPrinters() } label: {
+                HStack(spacing: 5) {
+                    if m.discovering {
+                        ProgressView().controlSize(.small).scaleEffect(0.7)
+                            .frame(width: 14, height: 14)
+                    } else {
+                        Image(systemName: "magnifyingglass")
+                    }
+                    Text(m.discovering ? "جاري البحث…" : "بحث عن الطابعات المتصلة")
+                        .font(.custom(arFont, size: 12))
+                }
+            }
+            .disabled(m.discovering)
+            .frame(maxWidth: .infinity, alignment: .leading)
             HStack {
                 Text("عدد النسخ").font(.custom(arFont, size: 12))
                 Spacer()
@@ -922,8 +1035,17 @@ struct Panel: View {
 }
 
 #if !TESTBUILD
+final class AppDelegate: NSObject, NSApplicationDelegate {
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        Model.shared.loadQueues()
+        Model.shared.primeLocalNetwork()
+        Model.shared.discoverPrinters(auto: true)
+    }
+}
+
 @main
 struct ScannerApp: App {
+    @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     var body: some Scene {
         MenuBarExtra {
             Panel()
