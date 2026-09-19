@@ -212,6 +212,27 @@ final class Model: ObservableObject {
         if !images.isEmpty { printPhotoURLs(images, deleteSources: false) }
     }
 
+    /// طباعة ملفات أُفلتت على اللوحة (سحب وإفلات).
+    /// PDF يُرسل مباشرة، الصور تمرّ عبر قوالب الصور، والبقية تُرسل كما هي.
+    static let imageExts: Set<String> =
+        ["png","jpg","jpeg","heic","heif","tiff","tif","gif","bmp","webp"]
+
+    func printDropped(_ urls: [URL]) {
+        guard !urls.isEmpty else { return }
+        NSApp.activate(ignoringOtherApps: true)
+        let pdfs   = urls.filter { $0.pathExtension.lowercased() == "pdf" }
+        let images = urls.filter { Model.imageExts.contains($0.pathExtension.lowercased()) }
+        let others = urls.filter {
+            let e = $0.pathExtension.lowercased()
+            return e != "pdf" && !Model.imageExts.contains(e)
+        }
+        for u in pdfs   { send(u, cleanup: false) }
+        for u in others { send(u, cleanup: false) }
+        if !images.isEmpty { printPhotoURLs(images, deleteSources: false) }
+        let n = urls.count
+        status = n == 1 ? "جاري طباعة الملف المُفلت…" : "جاري طباعة \(n) ملفات…"
+    }
+
     func printPhotoURLs(_ urls: [URL], deleteSources: Bool = false) {
         guard !urls.isEmpty else { return }
         busy = true; progress = true
@@ -702,8 +723,25 @@ let arFont = "thmanyah sans"
 struct Panel: View {
     @ObservedObject var m = Model.shared
     @State private var showSettings = false
+    @State private var dropTargeted = false
     @Environment(\.openWindow) private var openWindow
     @ObservedObject var q = PrintQueue.shared
+
+    private func handleDrop(_ providers: [NSItemProvider]) -> Bool {
+        var urls: [URL] = []
+        let group = DispatchGroup()
+        for p in providers {
+            group.enter()
+            _ = p.loadObject(ofClass: URL.self) { url, _ in
+                if let u = url, u.isFileURL { urls.append(u) }
+                group.leave()
+            }
+        }
+        group.notify(queue: .main) {
+            if !urls.isEmpty { Model.shared.printDropped(urls) }
+        }
+        return true
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -718,6 +756,28 @@ struct Panel: View {
             footer
         }
         .frame(width: 380)
+        .onDrop(of: [UTType.fileURL], isTargeted: $dropTargeted) { providers in
+            handleDrop(providers)
+        }
+        .overlay {
+            if dropTargeted {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(Color.accentColor.opacity(0.12))
+                    RoundedRectangle(cornerRadius: 10)
+                        .strokeBorder(Color.accentColor, style: StrokeStyle(lineWidth: 2, dash: [6]))
+                    VStack(spacing: 8) {
+                        Image(systemName: "arrow.down.doc.fill")
+                            .font(.system(size: 28, weight: .medium))
+                        Text("أفلت الملفات هنا للطباعة")
+                            .font(.custom(arFont, size: 13).weight(.medium))
+                    }
+                    .foregroundStyle(.tint)
+                }
+                .padding(6)
+                .allowsHitTesting(false)
+            }
+        }
         .onAppear {
             m.loadQueues()
             m.primeLocalNetwork()
@@ -762,6 +822,10 @@ struct Panel: View {
             Text("ضع الورقة في الماسح واضغط «مسح صفحة»")
                 .font(.custom(arFont, size: 12))
                 .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+            Text("أو اسحب ملفاً أو صورة وأفلته هنا لطباعته")
+                .font(.custom(arFont, size: 11))
+                .foregroundStyle(.tertiary)
                 .multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity)
