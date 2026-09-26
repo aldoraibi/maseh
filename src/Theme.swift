@@ -46,17 +46,24 @@ struct GlassEffect: NSViewRepresentable {
         v.blendingMode = .behindWindow
         v.state = .active
         v.isEmphasized = true
-        // النافذة شفافة حتى يظهر التمويه
-        DispatchQueue.main.async {
-            if let w = v.window {
-                w.isOpaque = false
-                w.backgroundColor = .clear
-                w.hasShadow = true
-            }
-        }
+        clearWindow(v)
         return v
     }
-    func updateNSView(_ v: NSVisualEffectView, context: Context) {}
+    func updateNSView(_ v: NSVisualEffectView, context: Context) { clearWindow(v) }
+
+    // تُجعل نافذة القائمة شفافة حتى يظهر تمويه الزجاج (تُطبَّق في كل ظهور)
+    private func clearWindow(_ v: NSVisualEffectView) {
+        DispatchQueue.main.async {
+            guard let w = v.window else { return }
+            w.isOpaque = false
+            w.backgroundColor = .clear
+            w.hasShadow = true
+            // إزالة أي خلفية مصمتة يرسمها النظام خلف اللوح
+            for sub in w.contentView?.subviews ?? [] where sub is NSVisualEffectView && sub !== v {
+                (sub as? NSVisualEffectView)?.state = .inactive
+            }
+        }
+    }
 }
 
 // خلفية «Liquid Glass»: زجاج + صبغة #1E2430 حسب الشفافية + توهّجان خفيفان

@@ -141,7 +141,7 @@ struct PhotoGrid: View {
 
                 Button {
                     NSApp.activate(ignoringOtherApps: true)
-                    openWindow(id: "options")
+                    gShowOptions?()
                 } label: {
                     Image(systemName: "slider.horizontal.3")
                 }

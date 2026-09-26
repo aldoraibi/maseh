@@ -5,6 +5,7 @@ import Network
 import CoreText
 import UniformTypeIdentifiers
 import UserNotifications
+import Combine
 
 // ───────────────────────── الطراز ─────────────────────────
 
@@ -725,6 +726,10 @@ func recognize(_ img: CGImage) async -> [(String, CGRect)] {
 
 let arFont = "thmanyah sans"
 
+// إغلاق عام لفتح النوافذ المساعدة من داخل الواجهات (يعرّفه StatusController)
+var gShowPhotos: (() -> Void)?
+var gShowOptions: (() -> Void)?
+
 struct Panel: View {
     @ObservedObject var m = Model.shared
     @State private var showSettings = false
@@ -985,11 +990,7 @@ struct Panel: View {
     }
 
     private func openPhotos() {
-        if let w = NSApp.windows.first(where: { $0.identifier?.rawValue.contains("photos") == true }) {
-            w.makeKeyAndOrderFront(nil)
-            return
-        }
-        openWindow(id: "photos")
+        gShowPhotos?()
     }
 
     private var settings: some View {
@@ -1049,7 +1050,7 @@ struct Panel: View {
             Button {
                 NSApp.activate(ignoringOtherApps: true)
                 showSettings = false
-                openWindow(id: "options")
+                gShowOptions?()
             } label: {
                 HStack(spacing: 5) {
                     Image(systemName: "slider.horizontal.3")
@@ -1119,8 +1120,110 @@ struct Panel: View {
 }
 
 #if !TESTBUILD
+/// شريط القوائم + لوح زجاجي مخصّص (نافذة شفافة فعلاً، خلاف نافذة MenuBarExtra المصمتة)
+@MainActor
+final class StatusController: NSObject {
+    private var statusItem: NSStatusItem!
+    private var panel: NSPanel?
+    private var photosWin: NSWindow?
+    private var optionsWin: NSWindow?
+    private var outsideMonitor: Any?
+    private var bag = Set<AnyCancellable>()
+
+    func setup() {
+        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+        if let b = statusItem.button {
+            b.image = NSImage(systemSymbolName: "scanner", accessibilityDescription: "الماسح")
+            b.image?.isTemplate = true
+            b.action = #selector(toggle)
+            b.target = self
+        }
+        // أيقونة الشريط تتحوّل لتحذير عند توقّف الطباعة
+        PrintQueue.shared.$paused.receive(on: RunLoop.main).sink { [weak self] paused in
+            let name = paused ? "exclamationmark.triangle.fill" : "scanner"
+            self?.statusItem.button?.image = NSImage(systemSymbolName: name, accessibilityDescription: "الماسح")
+            self?.statusItem.button?.image?.isTemplate = true
+        }.store(in: &bag)
+
+        gShowPhotos = { [weak self] in self?.showPhotos() }
+        gShowOptions = { [weak self] in self?.showOptions() }
+    }
+
+    @objc private func toggle() {
+        if let p = panel, p.isVisible { closePanel(); return }
+        showPanel()
+    }
+
+    private func closePanel() {
+        panel?.orderOut(nil)
+        if let m = outsideMonitor { NSEvent.removeMonitor(m); outsideMonitor = nil }
+    }
+
+    private func showPanel() {
+        let host = NSHostingView(rootView:
+            Panel().frame(width: 420).environment(\.layoutDirection, .rightToLeft))
+        let h = max(520, host.fittingSize.height)
+        let p = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 420, height: h),
+                        styleMask: [.nonactivatingPanel, .borderless, .fullSizeContentView],
+                        backing: .buffered, defer: false)
+        p.isOpaque = false
+        p.backgroundColor = .clear
+        p.hasShadow = true
+        p.isFloatingPanel = true
+        p.level = .popUpMenu
+        p.contentView = host
+        p.setContentSize(NSSize(width: 420, height: h))
+        if let b = statusItem.button, let bw = b.window {
+            let r = bw.convertToScreen(b.convert(b.bounds, to: nil))
+            p.setFrameOrigin(NSPoint(x: r.midX - 210, y: r.minY - h - 6))
+        }
+        p.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+        panel = p
+        outsideMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) {
+            [weak self] _ in self?.closePanel()
+        }
+    }
+
+    private func glassWindow(_ root: NSView, title: String, w: CGFloat, h: CGFloat) -> NSWindow {
+        let win = NSWindow(contentRect: NSRect(x: 0, y: 0, width: w, height: h),
+                           styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
+                           backing: .buffered, defer: false)
+        win.title = title
+        win.titlebarAppearsTransparent = true
+        win.titleVisibility = .hidden
+        win.isOpaque = false
+        win.backgroundColor = .clear
+        win.isMovableByWindowBackground = true
+        win.isReleasedWhenClosed = false
+        win.contentView = root
+        win.center()
+        return win
+    }
+
+    private func showPhotos() {
+        if let w = photosWin { w.makeKeyAndOrderFront(nil); NSApp.activate(ignoringOtherApps: true); return }
+        let host = NSHostingView(rootView: PhotoGrid())
+        let w = glassWindow(host, title: "طباعة صور", w: 720, h: 520)
+        w.makeKeyAndOrderFront(nil); NSApp.activate(ignoringOtherApps: true)
+        photosWin = w
+    }
+
+    private func showOptions() {
+        if let w = optionsWin { w.makeKeyAndOrderFront(nil); NSApp.activate(ignoringOtherApps: true); return }
+        let host = NSHostingView(rootView: OptionsView())
+        let w = glassWindow(host, title: "خيارات الطباعة", w: 560, h: 470)
+        w.makeKeyAndOrderFront(nil); NSApp.activate(ignoringOtherApps: true)
+        optionsWin = w
+    }
+}
+
+@MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
+    let status = StatusController()
     func applicationDidFinishLaunching(_ notification: Notification) {
+        NSApp.setActivationPolicy(.accessory)
+        status.setup()
         Model.shared.loadQueues()
         Model.shared.primeLocalNetwork()
         Model.shared.discoverPrinters(auto: true)
@@ -1129,33 +1232,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 }
 
-struct MenuLabel: View {
-    @ObservedObject var q = PrintQueue.shared
-    var body: some View {
-        Image(systemName: q.paused ? "exclamationmark.triangle.fill" : "scanner")
-    }
-}
-
 @main
 struct ScannerApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     var body: some Scene {
-        MenuBarExtra {
-            Panel()
-        } label: {
-            MenuLabel()
-        }
-        .menuBarExtraStyle(.window)
-
-        Window("طباعة صور", id: "photos") {
-            PhotoGrid()
-        }
-        .defaultSize(width: 720, height: 520)
-
-        Window("خيارات الطباعة", id: "options") {
-            OptionsView()
-        }
-        .defaultSize(width: 560, height: 470)
+        Settings { EmptyView() }
     }
 }
 #endif
