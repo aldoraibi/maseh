@@ -173,3 +173,38 @@ struct GlassCapsule: ButtonStyle {
                 .strokeBorder(Mid.divider, lineWidth: 1))
     }
 }
+
+// MARK: - أيقونة شريط القوائم «شعاع متحرك» (بأسلوب ميزان: خطوط رفيعة بأطراف مستديرة، 18×18)
+enum MenuBarIcon {
+    static func image(alert: Bool) -> NSImage {
+        let img = NSImage(size: NSSize(width: 18, height: 18), flipped: false) { _ in
+            let ink: NSColor = alert ? NSColor(srgbRed: 1.0, green: 0.706, blue: 0.659, alpha: 1) : .black
+            let c = CGPoint(x: 9, y: 9)
+            func P(_ x: CGFloat, _ y: CGFloat) -> CGPoint { CGPoint(x: c.x + x, y: c.y + y) }
+            func stroke(_ p: NSBezierPath, _ w: CGFloat, _ col: NSColor) {
+                p.lineWidth = w; p.lineCapStyle = .round; p.lineJoinStyle = .round; col.setStroke(); p.stroke()
+            }
+            // زوايا الإطار
+            let k: CGFloat = 7, l: CGFloat = 2.6, r: CGFloat = 1.6
+            for (sx, sy) in [(-1.0, -1.0), (1.0, -1.0), (-1.0, 1.0), (1.0, 1.0)] as [(CGFloat, CGFloat)] {
+                let p = NSBezierPath()
+                p.move(to: P(sx * k, sy * (k - l)))
+                p.line(to: P(sx * k, sy * (k - r)))
+                p.curve(to: P(sx * (k - r), sy * k), controlPoint1: P(sx * k, sy * k), controlPoint2: P(sx * k, sy * k))
+                p.line(to: P(sx * (k - l), sy * k))
+                stroke(p, 1.4, ink)
+            }
+            // الشعاع وأثراه
+            func seg(_ x: CGFloat, _ y: CGFloat, _ w: CGFloat, _ a: CGFloat) {
+                let p = NSBezierPath(); p.move(to: P(-x, y)); p.line(to: P(x, y)); stroke(p, w, ink.withAlphaComponent(a))
+            }
+            seg(4.6, 0.6, 1.5, 1.0)
+            seg(3.6, -1.6, 1.1, 0.45)
+            seg(2.6, -3.4, 0.9, 0.2)
+            return true
+        }
+        img.isTemplate = !alert
+        img.accessibilityDescription = "الماسح"
+        return img
+    }
+}

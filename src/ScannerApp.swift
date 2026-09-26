@@ -1133,16 +1133,13 @@ final class StatusController: NSObject {
     func setup() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         if let b = statusItem.button {
-            b.image = NSImage(systemSymbolName: "scanner", accessibilityDescription: "الماسح")
-            b.image?.isTemplate = true
+            b.image = MenuBarIcon.image(alert: false)
             b.action = #selector(toggle)
             b.target = self
         }
         // أيقونة الشريط تتحوّل لتحذير عند توقّف الطباعة
         PrintQueue.shared.$paused.receive(on: RunLoop.main).sink { [weak self] paused in
-            let name = paused ? "exclamationmark.triangle.fill" : "scanner"
-            self?.statusItem.button?.image = NSImage(systemSymbolName: name, accessibilityDescription: "الماسح")
-            self?.statusItem.button?.image?.isTemplate = true
+            self?.statusItem.button?.image = MenuBarIcon.image(alert: paused)
         }.store(in: &bag)
 
         gShowPhotos = { [weak self] in self?.showPhotos() }
