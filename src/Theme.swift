@@ -38,51 +38,76 @@ enum Mid {
     static func degree(_ i: Int) -> Color { degrees[max(0, min(degrees.count - 1, i))] }
 }
 
-// زجاج حقيقي: NSVisualEffectView يموّه ما خلف النافذة
-struct GlassEffect: NSViewRepresentable {
-    func makeNSView(context: Context) -> NSVisualEffectView {
-        let v = NSVisualEffectView()
-        v.material = .hudWindow          // مادة أنعم وأكثر شفافية
-        v.blendingMode = .behindWindow
-        v.state = .active
-        v.isEmphasized = true
-        clearWindow(v)
-        return v
-    }
-    func updateNSView(_ v: NSVisualEffectView, context: Context) { clearWindow(v) }
+// MARK: - اللغة والاتجاه (نفس نظام ميزان: العربية افتراضياً، وتُحفظ بالمفتاح "lang")
 
-    // تُجعل نافذة القائمة شفافة حتى يظهر تمويه الزجاج (تُطبَّق في كل ظهور)
-    private func clearWindow(_ v: NSVisualEffectView) {
-        DispatchQueue.main.async {
-            guard let w = v.window else { return }
-            w.isOpaque = false
-            w.backgroundColor = .clear
-            w.hasShadow = true
-            // إزالة أي خلفية مصمتة يرسمها النظام خلف اللوح
-            for sub in w.contentView?.subviews ?? [] where sub is NSVisualEffectView && sub !== v {
-                (sub as? NSVisualEffectView)?.state = .inactive
-            }
+enum Lang: String, CaseIterable {
+    case ar, en
+    static var current: Lang { Lang(rawValue: UserDefaults.standard.string(forKey: "lang") ?? "ar") ?? .ar }
+    var isRTL: Bool { self == .ar }
+    var layout: LayoutDirection { isRTL ? .rightToLeft : .leftToRight }
+    var nativeName: String { self == .ar ? "العربية" : "English" }
+}
+
+/// نص بلغتين حسب لغة الواجهة الحالية.
+func tr(_ ar: String, _ en: String) -> String { Lang.current == .ar ? ar : en }
+
+// MARK: - Liquid Glass — منقول حرفياً من ميزان
+
+extension View {
+    /// لوح زجاجي واحد يغطي الواجهة. الشفافية (0–1) من الإعدادات:
+    /// كلما زادت قلّت الصبغة الحبرية #1E2430، ويبقى التمويه دائماً ليبقى النص مقروءاً.
+    @ViewBuilder
+    func glassSheet(transparency: Double = 0.8, radius: CGFloat = 18) -> some View {
+        let t = min(max(transparency, 0), 1)
+        let tint = Color(hex: "1E2430", alpha: 0.25 + 0.6 * (1 - t))
+        if #available(macOS 26, *) {
+            self.glassEffect(.regular.tint(tint), in: .rect(cornerRadius: radius))
+        } else {
+            self.background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: radius, style: .continuous))
+                .background(RoundedRectangle(cornerRadius: radius, style: .continuous).fill(tint))
+        }
+    }
+
+    /// كبسولة/مستطيل زجاجي تفاعلي للأزرار (يلمع ويتمدّد عند الضغط على macOS 26).
+    @ViewBuilder
+    func glassButton(tint: Color? = nil, radius: CGFloat = 10) -> some View {
+        if #available(macOS 26, *) {
+            let g: Glass = tint.map { .regular.tint($0) } ?? .regular
+            self.glassEffect(g.interactive(), in: .rect(cornerRadius: radius))
+        } else {
+            self.background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: radius, style: .continuous))
+                .background(RoundedRectangle(cornerRadius: radius, style: .continuous).fill(tint ?? .clear))
         }
     }
 }
 
-// خلفية «Liquid Glass»: زجاج + صبغة #1E2430 حسب الشفافية + توهّجان خفيفان
-struct GlassBackground: View {
+/// هوية منتصف الليل + زجاج ميزان. `sheet: false` للمنبثقات التي يرسم النظام زجاجها بنفسه.
+struct MidnightStyle: ViewModifier {
     @ObservedObject var m = Model.shared
-    var body: some View {
-        // الشريط يتحكّم بشفافية اللوح كله: كلما زاد، خفت الزجاج نفسه تجاه سطح المكتب
-        let t = (m.glass - 0.35) / 0.65               // 0 عند 35٪ … 1 عند 100٪
-        let bgAlpha = 1.0 - 0.55 * t                  // 1.0 (معتم) … 0.45 (شفاف لكن مقروء)
-        ZStack {
-            GlassEffect()
-            Mid.panel.opacity(0.32)
-            RadialGradient(colors: [Color(hex: "2E3A50", alpha: 0.55), .clear],
-                           center: .topTrailing, startRadius: 4, endRadius: 420)
-            RadialGradient(colors: [Color(hex: "3E4A5E", alpha: 0.35), .clear],
-                           center: .bottomLeading, startRadius: 4, endRadius: 460)
+    var radius: CGFloat
+    var sheet: Bool
+    var window: Bool
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        let styled = content
+            .foregroundStyle(Mid.text)
+            .tint(Mid.accent)
+            .environment(\.colorScheme, .dark)
+        if !sheet {
+            styled
+        } else if window {
+            // النوافذ: الزجاج يمتد خلف شريط العنوان (مثل إعدادات ميزان)
+            styled.background { Color.clear.glassSheet(transparency: m.glass, radius: radius).ignoresSafeArea() }
+        } else {
+            styled.glassSheet(transparency: m.glass, radius: radius)
         }
-        .opacity(bgAlpha)
-        .ignoresSafeArea()
+    }
+}
+
+extension View {
+    /// ثيم منتصف الليل الزجاجي — اللوح (20)، النوافذ (24)، المنبثقات (بلا لوح إضافي).
+    func midnight(radius: CGFloat = 20, sheet: Bool = true, window: Bool = false) -> some View {
+        modifier(MidnightStyle(radius: radius, sheet: sheet, window: window))
     }
 }
 
@@ -100,16 +125,6 @@ struct MidnightBackground: View {
                            center: .bottomLeading, startRadius: 4, endRadius: 460)
         }
         .ignoresSafeArea()
-    }
-}
-
-extension View {
-    /// ثيم منتصف الليل الزجاجي لأي نافذة/لوح
-    func midnight() -> some View {
-        self.background(GlassBackground())
-            .foregroundStyle(Mid.text)
-            .tint(Mid.accent)
-            .environment(\.colorScheme, .dark)
     }
 }
 
@@ -136,9 +151,10 @@ struct IconTile: View {
 
 // التوقيع في منتصف الأسفل — «مطوّر بواسطة» + YAHYA ALDORAIBI باللون الخافت
 struct SignatureFooter: View {
+    @AppStorage("lang") private var lang = "ar"
     var body: some View {
         VStack(spacing: 4) {
-            Text("مطوّر بواسطة")
+            Text(tr("مطوّر بواسطة", "Developed by"))
                 .font(.custom(arFont, size: 10))
                 .foregroundStyle(Mid.faint)
             NameMarkView(height: 9, color: Mid.faint)
@@ -148,29 +164,33 @@ struct SignatureFooter: View {
     }
 }
 
-// الزر الأساسي: فاتح بنص داكن
+// الزر الأساسي: زجاج مصبوغ باللون المميّز ونص داكن (مثل زر ميزان الأساسي)
 struct PrimaryFill: ButtonStyle {
+    @Environment(\.isEnabled) private var enabled
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .foregroundStyle(Mid.deep)
+            .foregroundStyle(Mid.panel)
             .padding(.vertical, 8).padding(.horizontal, 12)
             .frame(maxWidth: .infinity)
-            .background(RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(Mid.accent.opacity(configuration.isPressed ? 0.8 : 1)))
+            .glassButton(tint: Mid.accent)
+            .scaleEffect(configuration.isPressed ? 0.97 : 1)
+            .opacity(enabled ? 1 : 0.45)
+            .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
 }
 
-// الزر الثانوي: كبسولة زجاجية
+// الزر الثانوي: زجاج صافٍ تفاعلي
 struct GlassCapsule: ButtonStyle {
+    @Environment(\.isEnabled) private var enabled
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .foregroundStyle(Mid.text)
             .padding(.vertical, 7).padding(.horizontal, 12)
             .frame(maxWidth: .infinity)
-            .background(RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(Color.white.opacity(configuration.isPressed ? 0.12 : 0.07)))
-            .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .strokeBorder(Mid.divider, lineWidth: 1))
+            .glassButton()
+            .scaleEffect(configuration.isPressed ? 0.97 : 1)
+            .opacity(enabled ? 1 : 0.45)
+            .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
 }
 
@@ -204,7 +224,7 @@ enum MenuBarIcon {
             return true
         }
         img.isTemplate = !alert
-        img.accessibilityDescription = "الماسح"
+        img.accessibilityDescription = tr("الماسح", "Maseh")
         return img
     }
 }

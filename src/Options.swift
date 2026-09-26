@@ -105,7 +105,7 @@ func parsePPD(queue: String) -> [PPDOption] {
         if l.hasPrefix("*CloseUI:") {
             if !key.isEmpty, wantedKeys.contains(key), choices.count > 1 {
                 options.append(PPDOption(id: key,
-                                         name: arabicKeyNames[key] ?? label,
+                                         name: Lang.current == .ar ? (arabicKeyNames[key] ?? label) : label,
                                          def: defaults[key] ?? choices[0].id,
                                          choices: choices))
             }
@@ -121,8 +121,8 @@ func parsePPD(queue: String) -> [PPDOption] {
             let cid = parts.first?.trimmingCharacters(in: .whitespaces) ?? ""
             let cname = parts.count > 1 ? parts[1] : cid
             guard !cid.isEmpty else { continue }
-            var pretty = arabicChoiceNames[cname] ?? cname
-            pretty = pretty.replacingOccurrences(of: " borderless", with: " بلا حدود")
+            var pretty = Lang.current == .ar ? (arabicChoiceNames[cname] ?? cname) : cname
+            pretty = pretty.replacingOccurrences(of: " borderless", with: tr(" بلا حدود", " borderless"))
             pretty = pretty.replacingOccurrences(of: "US Letter", with: "Letter")
             choices.append(PPDChoice(id: cid, name: pretty))
         }
@@ -149,11 +149,11 @@ func parseLpoptions(queue: String) -> [PPDOption] {
             var v = String(t)
             if v.hasPrefix("*") { v.removeFirst(); def = v }
             guard !v.isEmpty else { continue }
-            choices.append(PPDChoice(id: v, name: arabicChoiceNames[v] ?? v))
+            choices.append(PPDChoice(id: v, name: Lang.current == .ar ? (arabicChoiceNames[v] ?? v) : v))
         }
         if choices.count > 1 {
             options.append(PPDOption(id: key,
-                                     name: arabicKeyNames[key] ?? label,
+                                     name: Lang.current == .ar ? (arabicKeyNames[key] ?? label) : label,
                                      def: def.isEmpty ? choices[0].id : def,
                                      choices: choices))
         }
@@ -211,12 +211,13 @@ final class PrintOptions: ObservableObject {
 
 struct OptionsView: View {
     @ObservedObject var po = PrintOptions.shared
+    @AppStorage("lang") private var lang = "ar"
     @ObservedObject var m = Model.shared
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
-                Text("خيارات الطباعة")
+                Text(tr("خيارات الطباعة", "Print options"))
                     .font(.custom(arSerif, size: 16).weight(.medium))
                     .foregroundStyle(Mid.text)
                 Spacer()
@@ -232,7 +233,7 @@ struct OptionsView: View {
             Divider()
 
             if po.options.isEmpty {
-                Text("لا توجد خيارات متاحة لهذه الطابعة")
+                Text(tr("لا توجد خيارات متاحة لهذه الطابعة", "No options available for this printer"))
                     .font(.custom(arFont, size: 12))
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity)
@@ -266,10 +267,10 @@ struct OptionsView: View {
 
             HStack {
                 Button(action: po.reset) {
-                    Text("إعادة للافتراضي").font(.custom(arFont, size: 12))
+                    Text(tr("إعادة للافتراضي", "Restore defaults")).font(.custom(arFont, size: 12))
                 }
                 Spacer()
-                Text("تُطبَّق على كل مهام الطباعة من التطبيق")
+                Text(tr("تُطبَّق على كل مهام الطباعة من التطبيق", "Applies to every print job from the app"))
                     .font(.custom(arFont, size: 11))
                     .foregroundStyle(Mid.secondary)
             }
@@ -279,8 +280,9 @@ struct OptionsView: View {
             SignatureFooter().padding(.bottom, 10)
         }
         .frame(minWidth: 520, minHeight: 420)
-        .midnight()
-        .environment(\.layoutDirection, .rightToLeft)
+        .midnight(radius: 24, window: true)
+        .environment(\.layoutDirection, Lang.current.layout)
         .onAppear { m.loadQueues(); po.load() }
+        .onChange(of: lang) { _, _ in po.load(force: true) }
     }
 }

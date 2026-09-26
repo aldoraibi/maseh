@@ -8,7 +8,7 @@ final class PhotoLib: ObservableObject {
 
     @Published var assets: [PHAsset] = []
     @Published var selected: Set<String> = []
-    @Published var note = "جاري فتح مكتبة الصور…"
+    @Published var note = tr("جاري فتح مكتبة الصور…", "Opening the Photos library…")
     @Published var working = false
 
     func load() {
@@ -16,7 +16,7 @@ final class PhotoLib: ObservableObject {
         PHPhotoLibrary.requestAuthorization(for: .readWrite) { st in
             DispatchQueue.main.async {
                 guard st == .authorized || st == .limited else {
-                    self.note = "لم يُسمح بالوصول إلى الصور — فعّلها من إعدادات النظام ← الخصوصية ← الصور"
+                    self.note = tr("لم يُسمح بالوصول إلى الصور — فعّلها من إعدادات النظام ← الخصوصية ← الصور", "No access to Photos — enable it in System Settings → Privacy → Photos")
                     return
                 }
                 let o = PHFetchOptions()
@@ -27,7 +27,7 @@ final class PhotoLib: ObservableObject {
                 var a: [PHAsset] = []
                 res.enumerateObjects { obj, _, _ in a.append(obj) }
                 self.assets = a
-                self.note = a.isEmpty ? "لا توجد صور في المكتبة" : ""
+                self.note = a.isEmpty ? tr("لا توجد صور في المكتبة", "No photos in the library") : ""
             }
         }
     }
@@ -41,7 +41,7 @@ final class PhotoLib: ObservableObject {
         let chosen = assets.filter { selected.contains($0.localIdentifier) }
         guard !chosen.isEmpty else { return }
         working = true
-        note = "جاري تحضير \(chosen.count) صورة…"
+        note = tr("جاري تحضير \(chosen.count) صورة…", "Preparing \(chosen.count) photos…")
 
         let opts = PHImageRequestOptions()
         opts.isNetworkAccessAllowed = true
@@ -69,7 +69,7 @@ final class PhotoLib: ObservableObject {
 
         group.notify(queue: .main) {
             self.working = false
-            guard !urls.isEmpty else { self.note = "تعذّر تحضير الصور"; return }
+            guard !urls.isEmpty else { self.note = tr("تعذّر تحضير الصور", "Couldn't prepare the photos"); return }
             self.note = ""
             self.selected.removeAll()
             Model.shared.printPhotoURLs(urls, deleteSources: true)
@@ -80,6 +80,7 @@ final class PhotoLib: ObservableObject {
 
 struct PhotoGrid: View {
     @ObservedObject var lib = PhotoLib.shared
+    @AppStorage("lang") private var lang = "ar"
     @ObservedObject var m = Model.shared
     @ObservedObject var q = PrintQueue.shared
     @Environment(\.openWindow) private var openWindow
@@ -109,33 +110,33 @@ struct PhotoGrid: View {
             Divider()
 
             HStack(spacing: 10) {
-                Text(lib.selected.isEmpty ? "اختر صوراً للطباعة" : "\(lib.selected.count) صورة محددة")
+                Text(lib.selected.isEmpty ? tr("اختر صوراً للطباعة", "Choose photos to print") : tr("\(lib.selected.count) صورة محددة", "\(lib.selected.count) selected"))
                     .font(.custom(arFont, size: 12))
                     .foregroundStyle(.secondary)
 
                 Spacer()
 
                 Picker("", selection: $m.layout) {
-                    Text("صورة في صفحة").tag("one")
-                    Text("صورتان").tag("two")
-                    Text("٤ صور").tag("four")
-                    Text("٦ صور").tag("six")
-                    Text("٩ صور").tag("nine")
+                    Text(tr("صورة في صفحة", "One per page")).tag("one")
+                    Text(tr("صورتان", "2 photos")).tag("two")
+                    Text(tr("٤ صور", "4 photos")).tag("four")
+                    Text(tr("٦ صور", "6 photos")).tag("six")
+                    Text(tr("٩ صور", "9 photos")).tag("nine")
                     Divider()
-                    Text("شخصية ٤×٦ سم").tag("id46")
-                    Text("شخصية ٣٥×٤٥ مم").tag("id35")
+                    Text(tr("شخصية ٤×٦ سم", "ID 4×6 cm")).tag("id46")
+                    Text(tr("شخصية ٣٥×٤٥ مم", "ID 35×45 mm")).tag("id35")
                 }
                 .labelsHidden().frame(width: 130)
 
                 Picker("", selection: $m.photoPaper) {
                     Text("A4").tag("A4")
-                    Text("١٠×١٥ سم").tag("10x15")
-                    Text("١٣×١٨ سم").tag("13x18")
+                    Text(tr("١٠×١٥ سم", "10×15 cm")).tag("10x15")
+                    Text(tr("١٣×١٨ سم", "13×18 cm")).tag("13x18")
                 }
                 .labelsHidden().frame(width: 110)
 
                 Toggle(isOn: $m.photoFill) {
-                    Text("ملء الصفحة").font(.custom(arFont, size: 11))
+                    Text(tr("ملء الصفحة", "Fill page")).font(.custom(arFont, size: 11))
                 }
                 .toggleStyle(.checkbox)
 
@@ -145,16 +146,16 @@ struct PhotoGrid: View {
                 } label: {
                     Image(systemName: "slider.horizontal.3")
                 }
-                .help("خيارات الطابعة")
+                .help(tr("خيارات الطابعة", "Printer options"))
 
                 Button(action: lib.printSelected) {
                     HStack(spacing: 5) {
                         Image(systemName: "printer")
-                        Text("طباعة").font(.custom(arFont, size: 13).weight(.medium))
+                        Text(tr("طباعة", "Print")).font(.custom(arFont, size: 13).weight(.medium))
                     }
-                    .foregroundStyle(Mid.deep)
+                    .foregroundStyle(Mid.panel)
                     .padding(.horizontal, 14).padding(.vertical, 7)
-                    .background(Capsule().fill(Mid.accent))
+                    .glassButton(tint: Mid.accent, radius: 16)
                 }
                 .buttonStyle(.plain)
                 .disabled(lib.selected.isEmpty || lib.working || m.busy)
@@ -163,9 +164,9 @@ struct PhotoGrid: View {
             .padding(.vertical, 10)
         }
         .frame(minWidth: 640, minHeight: 460)
-        .midnight()
+        .midnight(radius: 24, window: true)
         .safeAreaInset(edge: .bottom) { SignatureFooter().padding(.bottom, 8) }
-        .environment(\.layoutDirection, .rightToLeft)
+        .environment(\.layoutDirection, Lang.current.layout)
         .safeAreaInset(edge: .top) {
             if !q.jobs.isEmpty { QueueBlock() }
         }

@@ -11,6 +11,7 @@ final class PrintQueue: ObservableObject {
         let title: String
         let rank: String
         let size: String
+        var active = false
     }
 
     struct PState { var stopped = false; var paperOut = false; var attention = false }
@@ -137,7 +138,7 @@ final class PrintQueue: ObservableObject {
     func resume() {
         let q = Model.shared.queue
         guard !q.isEmpty else { return }
-        Model.shared.status = "جاري استئناف الطباعة…"
+        Model.shared.status = tr("جاري استئناف الطباعة…", "Resuming printing…")
         resumeThrottle = 0
         Task.detached(priority: .userInitiated) {
             PrintQueue.resumeQueue(q)
@@ -147,10 +148,10 @@ final class PrintQueue: ObservableObject {
 
     private func notifyStall(_ paperOut: Bool) {
         let content = UNMutableNotificationContent()
-        content.title = paperOut ? "انتهى الورق" : "الطباعة متوقفة"
+        content.title = paperOut ? tr("انتهى الورق", "Out of paper") : tr("الطباعة متوقفة", "Printing paused")
         content.body = paperOut
-            ? "ضع ورقاً في الطابعة وستُكمل الطباعة تلقائياً"
-            : "تحقّق من الطابعة لاستئناف الطباعة"
+            ? tr("ضع ورقاً في الطابعة وستُكمل الطباعة تلقائياً", "Load paper and printing will resume automatically")
+            : tr("تحقّق من الطابعة لاستئناف الطباعة", "Check the printer to resume printing")
         content.sound = .default
         let req = UNNotificationRequest(identifier: "maseh.stall.\(UUID().uuidString)",
                                         content: content, trigger: nil)
@@ -168,12 +169,13 @@ final class PrintQueue: ObservableObject {
             let f = line.split(separator: " ", omittingEmptySubsequences: true).map(String.init)
             var kb = ""
             if f.count >= 3, let b = Int(f[2]), b > 0 {
-                kb = b >= 1_048_576 ? "\(b / 1_048_576) م.ب" : "\(max(1, b / 1024)) ك.ب"
+                kb = b >= 1_048_576 ? tr("\(b / 1_048_576) م.ب", "\(b / 1_048_576) MB") : tr("\(max(1, b / 1024)) ك.ب", "\(max(1, b / 1024)) KB")
             }
             list.append(Job(id: id,
                             title: titles[id] ?? id,
-                            rank: active.contains(id) ? "قيد الطباعة" : "في الانتظار",
-                            size: kb))
+                            rank: active.contains(id) ? tr("قيد الطباعة", "Printing") : tr("في الانتظار", "Waiting"),
+                            size: kb,
+                            active: active.contains(id)))
         }
         return list
     }
@@ -184,10 +186,10 @@ final class PrintQueue: ObservableObject {
 
         if list.isEmpty {
             paused = false; attention = ""; notifiedStall = false; resumeThrottle = 0
-            state = "لا توجد مهام"
+            state = tr("لا توجد مهام", "No jobs")
             if hadJobs {
                 hadJobs = false
-                Model.shared.status = "تمت الطباعة ✓"
+                Model.shared.status = tr("تمت الطباعة ✓", "Printed ✓")
             }
             idleTicks += 1
             if idleTicks > 8 { stop() }
@@ -199,11 +201,11 @@ final class PrintQueue: ObservableObject {
 
         if ps.paperOut || ps.attention {
             paused = true
-            attention = ps.paperOut ? "انتهى الورق" : "الطباعة متوقفة"
-            state = ps.paperOut ? "انتهى الورق" : "الطباعة متوقفة"
+            attention = ps.paperOut ? tr("انتهى الورق", "Out of paper") : tr("الطباعة متوقفة", "Printing paused")
+            state = ps.paperOut ? tr("انتهى الورق", "Out of paper") : tr("الطباعة متوقفة", "Printing paused")
             Model.shared.status = ps.paperOut
-                ? "⚠️ انتهى الورق — ضع ورقاً وستُكمل تلقائياً"
-                : "⚠️ الطباعة متوقفة — تحقّق من الطابعة"
+                ? tr("⚠️ انتهى الورق — ضع ورقاً وستُكمل تلقائياً", "⚠️ Out of paper — load paper and it will resume")
+                : tr("⚠️ الطباعة متوقفة — تحقّق من الطابعة", "⚠️ Printing paused — check the printer")
 
             if !notifiedStall {
                 notifiedStall = true
@@ -219,7 +221,7 @@ final class PrintQueue: ObservableObject {
             }
         } else {
             paused = false; attention = ""; notifiedStall = false; resumeThrottle = 0
-            state = list.contains { $0.rank == "قيد الطباعة" } ? "تطبع الآن" : "في الانتظار"
+            state = list.contains { $0.active } ? tr("تطبع الآن", "Printing now") : tr("في الانتظار", "Waiting")
         }
     }
 
@@ -238,6 +240,7 @@ final class PrintQueue: ObservableObject {
 
 struct QueueBlock: View {
     @ObservedObject var q = PrintQueue.shared
+    @AppStorage("lang") private var lang = "ar"
 
     var body: some View {
         VStack(alignment: .leading, spacing: 7) {
@@ -247,16 +250,16 @@ struct QueueBlock: View {
                         .font(.system(size: 12))
                         .foregroundStyle(Mid.warning)
                     VStack(alignment: .leading, spacing: 1) {
-                        Text(q.attention.isEmpty ? "الطباعة متوقفة" : q.attention)
+                        Text(q.attention.isEmpty ? tr("الطباعة متوقفة", "Printing paused") : q.attention)
                             .font(.custom(arFont, size: 11).weight(.bold))
                             .foregroundStyle(Mid.text)
-                        Text("ضع ورقاً وستُكمل تلقائياً، أو اضغط «متابعة»")
+                        Text(tr("ضع ورقاً وستُكمل تلقائياً، أو اضغط «متابعة»", "Load paper to resume automatically, or press “Resume”"))
                             .font(.custom(arFont, size: 10))
                             .foregroundStyle(Mid.secondary)
                     }
                     Spacer()
                     Button(action: q.resume) {
-                        Text("متابعة")
+                        Text(tr("متابعة", "Resume"))
                             .font(.custom(arFont, size: 11).weight(.medium))
                             .foregroundStyle(Mid.deep)
                             .padding(.vertical, 5).padding(.horizontal, 12)
@@ -272,13 +275,13 @@ struct QueueBlock: View {
                 Image(systemName: "printer.fill")
                     .font(.system(size: 11))
                     .foregroundStyle(q.paused ? Mid.warning : Mid.accent)
-                Text("طابور الطباعة — \(q.state)")
+                Text(tr("طابور الطباعة — \(q.state)", "Print queue — \(q.state)"))
                     .font(.custom(arFont, size: 11).weight(.medium))
                     .foregroundStyle(Mid.secondary)
                 Spacer()
                 if q.jobs.count > 1 {
                     Button(action: q.cancelAll) {
-                        Text("إلغاء الكل").font(.custom(arFont, size: 10))
+                        Text(tr("إلغاء الكل", "Cancel all")).font(.custom(arFont, size: 10))
                     }
                     .buttonStyle(.plain)
                     .foregroundStyle(.red)
@@ -287,7 +290,7 @@ struct QueueBlock: View {
 
             ForEach(q.jobs) { job in
                 HStack(spacing: 7) {
-                    if job.rank == "قيد الطباعة" {
+                    if job.active {
                         ProgressView().controlSize(.mini).scaleEffect(0.7).frame(width: 12)
                     } else {
                         Circle().fill(Color.orange).frame(width: 6, height: 6).frame(width: 12)

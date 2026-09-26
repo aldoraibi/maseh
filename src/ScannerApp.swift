@@ -156,7 +156,7 @@ final class Model: ObservableObject {
     func discoverPrinters(auto: Bool = false) {
         guard !discovering else { return }
         discovering = true
-        if !auto { status = "جاري البحث عن الطابعات…" }
+        if !auto { status = tr("جاري البحث عن الطابعات…", "Searching for printers…") }
         let currentQueue = queue
         Task.detached(priority: .userInitiated) {
             let raw = Model.shellTimeout(
@@ -192,11 +192,11 @@ final class Model: ObservableObject {
                         self.queue = c
                         PrintOptions.shared.load(force: true)
                     }
-                    self.status = "الطابعة المتصلة: \(c)"
+                    self.status = tr("الطابعة المتصلة: \(c)", "Connected printer: \(c)")
                 } else if !online.isEmpty {
-                    self.status = "عُثر على طابعة غير مُضافة في النظام — أضِفها من «طابعات وماسحات»"
+                    self.status = tr("عُثر على طابعة غير مُضافة في النظام — أضِفها من «طابعات وماسحات»", "Found a printer that isn't added to macOS — add it in Printers & Scanners")
                 } else if !auto {
-                    self.status = "لم يُعثر على طابعة متصلة على هذه الشبكة"
+                    self.status = tr("لم يُعثر على طابعة متصلة على هذه الشبكة", "No connected printer found on this network")
                 }
             }
         }
@@ -205,8 +205,8 @@ final class Model: ObservableObject {
     func printFile() {
         NSApp.activate(ignoringOtherApps: true)
         let panel = NSOpenPanel()
-        panel.title = "اختر ملفات أو صوراً للطباعة"
-        panel.prompt = "طباعة"
+        panel.title = tr("اختر ملفات أو صوراً للطباعة", "Choose files or images to print")
+        panel.prompt = tr("طباعة", "Print")
         panel.allowsMultipleSelection = true
         panel.allowedContentTypes = [.pdf, .image]
         guard panel.runModal() == .OK, !panel.urls.isEmpty else { return }
@@ -236,13 +236,13 @@ final class Model: ObservableObject {
         for u in others { send(u, cleanup: false) }
         if !images.isEmpty { printPhotoURLs(images, deleteSources: false) }
         let n = urls.count
-        status = n == 1 ? "جاري طباعة الملف المُفلت…" : "جاري طباعة \(n) ملفات…"
+        status = n == 1 ? tr("جاري طباعة الملف المُفلت…", "Printing the dropped file…") : tr("جاري طباعة \(n) ملفات…", "Printing \(n) files…")
     }
 
     func printPhotoURLs(_ urls: [URL], deleteSources: Bool = false) {
         guard !urls.isEmpty else { return }
         busy = true; progress = true
-        status = "جاري تجهيز الصور…"
+        status = tr("جاري تجهيز الصور…", "Preparing photos…")
         let paper = photoPaper, fill = photoFill, lay = layout
         let tmp = FileManager.default.temporaryDirectory
             .appendingPathComponent("photos_\(UUID().uuidString).pdf")
@@ -260,7 +260,7 @@ final class Model: ObservableObject {
                     self.send(tmp, cleanup: true)
                 } else {
                     try? FileManager.default.removeItem(at: tmp)
-                    self.status = "تعذّر تجهيز الصور"
+                    self.status = tr("تعذّر تجهيز الصور", "Couldn't prepare the photos")
                 }
             }
         }
@@ -269,7 +269,7 @@ final class Model: ObservableObject {
     func printScanned() {
         guard !pages.isEmpty, !busy else { return }
         busy = true; progress = true
-        status = "جاري التجهيز للطباعة…"
+        status = tr("جاري التجهيز للطباعة…", "Preparing to print…")
         let snapshot = pages.map { rotatedCG($0.cg, degrees: $0.rotation) }
         let density = CGFloat(dpi)
         let tmp = FileManager.default.temporaryDirectory
@@ -282,7 +282,7 @@ final class Model: ObservableObject {
                     self.send(tmp, cleanup: true)
                 } else {
                     try? FileManager.default.removeItem(at: tmp)
-                    self.status = "تعذّر التجهيز"
+                    self.status = tr("تعذّر التجهيز", "Preparation failed")
                 }
             }
         }
@@ -291,7 +291,7 @@ final class Model: ObservableObject {
     func send(_ url: URL, cleanup: Bool) {
         guard !queue.isEmpty else {
             if cleanup { try? FileManager.default.removeItem(at: url) }
-            status = "لم تُحدَّد طابعة"
+            status = tr("لم تُحدَّد طابعة", "No printer selected")
             return
         }
         let p = Process()
@@ -305,7 +305,7 @@ final class Model: ObservableObject {
         p.environment = ["LANG": "C", "LC_ALL": "C", "PATH": "/usr/bin:/bin"]
         do { try p.run() } catch {
             if cleanup { try? FileManager.default.removeItem(at: url) }
-            status = "تعذّر إرسال الطباعة"
+            status = tr("تعذّر إرسال الطباعة", "Couldn't send the print job")
             return
         }
         let reply = String(data: outPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
@@ -318,8 +318,8 @@ final class Model: ObservableObject {
         }
         PrintQueue.shared.start()
         status = p.terminationStatus == 0
-            ? "أُرسلت للطباعة ✓"
-            : "فشل الإرسال للطابعة"
+            ? tr("أُرسلت للطباعة ✓", "Sent to printer ✓")
+            : tr("فشل الإرسال للطابعة", "Sending to the printer failed")
         if cleanup {
             DispatchQueue.main.asyncAfter(deadline: .now() + 25) {
                 try? FileManager.default.removeItem(at: url)
@@ -360,8 +360,8 @@ final class Model: ObservableObject {
 
     func scan() {
         guard !busy else { return }
-        guard let exe = pixmaURL else { status = "لم يُعثر على محرك المسح"; return }
-        busy = true; progress = true; status = "جاري المسح…"
+        guard let exe = pixmaURL else { status = tr("لم يُعثر على محرك المسح", "Scan engine not found"); return }
+        busy = true; progress = true; status = tr("جاري المسح…", "Scanning…")
         let ip = printerIP, res = String(dpi), mode = colorMode
 
         Task.detached(priority: .userInitiated) {
@@ -374,11 +374,11 @@ final class Model: ObservableObject {
                 if let img = r.image {
                     if Model.isBlank(img) {
                         if attempt == 0 {
-                            await MainActor.run { self.status = "المسحة سوداء… إعادة المحاولة" }
+                            await MainActor.run { self.status = tr("المسحة سوداء… إعادة المحاولة", "Scan came out black… retrying") }
                             try? await Task.sleep(nanoseconds: 1_500_000_000)
                             continue
                         }
-                        failure = "خرجت الصفحة سوداء — تأكد من وجود ورقة على الزجاج وإغلاق الغطاء، ثم أعد المسح"
+                        failure = tr("خرجت الصفحة سوداء — تأكد من وجود ورقة على الزجاج وإغلاق الغطاء، ثم أعد المسح", "The page came out black — make sure a sheet is on the glass and the lid is closed, then scan again")
                     } else {
                         made = img
                     }
@@ -392,9 +392,9 @@ final class Model: ObservableObject {
                 self.busy = false; self.progress = false
                 if let img = made {
                     self.pages.append(ScanPage(cg: img))
-                    self.status = "تمت إضافة صفحة \(self.pages.count)"
+                    self.status = tr("تمت إضافة صفحة \(self.pages.count)", "Added page \(self.pages.count)")
                 } else {
-                    self.status = failure ?? "فشل غير معروف"
+                    self.status = failure ?? tr("فشل غير معروف", "Unknown error")
                 }
             }
         }
@@ -424,23 +424,23 @@ final class Model: ObservableObject {
                     .last(where: { !$0.isEmpty }) ?? ""
                 let l = last.lowercased()
                 if l.contains("no canon") || l.contains("not found") {
-                    return (nil, "لم يُعثر على الطابعة على هذه الشبكة")
+                    return (nil, tr("لم يُعثر على الطابعة على هذه الشبكة", "Printer not found on this network"))
                 } else if l.contains("permission") || l.contains("not permitted") {
-                    return (nil, "الشبكة المحلية محجوبة — فعّلها من إعدادات النظام")
+                    return (nil, tr("الشبكة المحلية محجوبة — فعّلها من إعدادات النظام", "Local Network access is blocked — enable it in System Settings"))
                 } else if l.contains("no route") || l.contains("timed out") || l.contains("refused") {
-                    return (nil, "الطابعة لا تستجيب — تأكد أنها متصلة بنفس الشبكة")
+                    return (nil, tr("الطابعة لا تستجيب — تأكد أنها متصلة بنفس الشبكة", "The printer isn't responding — make sure it's on the same network"))
                 } else if last.isEmpty {
-                    return (nil, "تعذّر الاتصال بالماسح")
+                    return (nil, tr("تعذّر الاتصال بالماسح", "Couldn't connect to the scanner"))
                 }
                 return (nil, String(last.prefix(70)))
             }
         } catch {
-            return (nil, "تعذّر تشغيل محرك المسح")
+            return (nil, tr("تعذّر تشغيل محرك المسح", "Couldn't start the scan engine"))
         }
         guard let src = CGImageSourceCreateWithURL(tmp as CFURL, nil),
               let img = CGImageSourceCreateImageAtIndex(src, 0,
                         [kCGImageSourceShouldCacheImmediately: true] as CFDictionary) else {
-            return (nil, "تعذّرت قراءة الصورة الممسوحة")
+            return (nil, tr("تعذّرت قراءة الصورة الممسوحة", "Couldn't read the scanned image"))
         }
         return (img, nil)
     }
@@ -474,7 +474,7 @@ final class Model: ObservableObject {
 
     func remove(_ id: UUID) {
         pages.removeAll { $0.id == id }
-        status = pages.isEmpty ? "" : "\(pages.count) صفحة"
+        status = pages.isEmpty ? "" : tr("\(pages.count) صفحة", "\(pages.count) pages")
     }
 
     func clear() { pages.removeAll(); status = "" }
@@ -484,9 +484,9 @@ final class Model: ObservableObject {
         NSApp.activate(ignoringOtherApps: true)
 
         let panel = NSSavePanel()
-        panel.title = "حفظ المستند الممسوح"
-        panel.nameFieldLabel = "الاسم:"
-        panel.prompt = "حفظ"
+        panel.title = tr("حفظ المستند الممسوح", "Save scanned document")
+        panel.nameFieldLabel = tr("الاسم:", "Name:")
+        panel.prompt = tr("حفظ", "Save")
         panel.allowedContentTypes = [.pdf]
         panel.nameFieldStringValue = defaultName()
         panel.canCreateDirectories = true
@@ -496,7 +496,7 @@ final class Model: ObservableObject {
         lastDir = url.deletingLastPathComponent().path
 
         busy = true; progress = true
-        status = ocr ? "جاري استخراج النص والحفظ…" : "جاري الحفظ…"
+        status = ocr ? tr("جاري استخراج النص والحفظ…", "Recognizing text and saving…") : tr("جاري الحفظ…", "Saving…")
         let snapshot = pages.map { rotatedCG($0.cg, degrees: $0.rotation) }
         let wantOCR = ocr, density = CGFloat(dpi)
 
@@ -505,11 +505,11 @@ final class Model: ObservableObject {
             await MainActor.run {
                 self.busy = false; self.progress = false
                 if ok {
-                    self.status = "تم الحفظ ✓"
+                    self.status = tr("تم الحفظ ✓", "Saved ✓")
                     NSWorkspace.shared.activateFileViewerSelecting([url])
                     self.pages.removeAll()
                 } else {
-                    self.status = "تعذّر إنشاء الملف"
+                    self.status = tr("تعذّر إنشاء الملف", "Couldn't create the file")
                 }
             }
         }
@@ -519,7 +519,7 @@ final class Model: ObservableObject {
         let f = DateFormatter()
         f.locale = Locale(identifier: "en_US_POSIX")
         f.dateFormat = "yyyy-MM-dd HHmm"
-        return "مسح \(f.string(from: Date()))"
+        return tr("مسح \(f.string(from: Date()))", "Scan \(f.string(from: Date()))")
     }
 }
 
@@ -732,6 +732,7 @@ var gShowOptions: (() -> Void)?
 
 struct Panel: View {
     @ObservedObject var m = Model.shared
+    @AppStorage("lang") private var lang = "ar"
     @State private var showSettings = false
     @State private var dropTargeted = false
     @Environment(\.openWindow) private var openWindow
@@ -780,7 +781,7 @@ struct Panel: View {
                     VStack(spacing: 8) {
                         Image(systemName: "arrow.down.doc.fill")
                             .font(.system(size: 28, weight: .medium))
-                        Text("أفلت الملفات هنا للطباعة")
+                        Text(tr("أفلت الملفات هنا للطباعة", "Drop files here to print"))
                             .font(.custom(arFont, size: 13).weight(.medium))
                     }
                     .foregroundStyle(.tint)
@@ -796,14 +797,15 @@ struct Panel: View {
             q.start()
         }
         .onDisappear { q.stop() }
-        .environment(\.layoutDirection, .rightToLeft)
+        .onChange(of: lang) { _, _ in m.status = ""; PrintOptions.shared.load(force: true) }
+        .environment(\.layoutDirection, Lang.current.layout)
     }
 
     private var header: some View {
         HStack(spacing: 11) {
             IconTile(symbol: "scanner.fill", degree: 0, size: 34)
             VStack(alignment: .leading, spacing: 1) {
-                Text("الماسح")
+                Text(tr("الماسح", "Maseh"))
                     .font(.custom(arSerif, size: 16).weight(.medium))
                     .foregroundStyle(Mid.text)
                 Text(m.status.isEmpty ? "Canon G3010" : m.status)
@@ -830,11 +832,11 @@ struct Panel: View {
             Image(systemName: "doc.viewfinder")
                 .font(.system(size: 30, weight: .light))
                 .foregroundStyle(Mid.faint)
-            Text("ضع الورقة في الماسح واضغط «مسح صفحة»")
+            Text(tr("ضع الورقة في الماسح واضغط «مسح صفحة»", "Place a sheet on the scanner and press “Scan page”"))
                 .font(.custom(arFont, size: 12))
                 .foregroundStyle(Mid.secondary)
                 .multilineTextAlignment(.center)
-            Text("أو اسحب ملفاً أو صورة وأفلته هنا لطباعته")
+            Text(tr("أو اسحب ملفاً أو صورة وأفلته هنا لطباعته", "Or drag a file or image here to print it"))
                 .font(.custom(arFont, size: 11))
                 .foregroundStyle(Mid.faint)
                 .multilineTextAlignment(.center)
@@ -893,7 +895,7 @@ struct Panel: View {
             Button(action: m.scan) {
                 HStack(spacing: 7) {
                     Image(systemName: "plus.viewfinder")
-                    Text(m.pages.isEmpty ? "مسح صفحة" : "مسح صفحة أخرى")
+                    Text(m.pages.isEmpty ? tr("مسح صفحة", "Scan page") : tr("مسح صفحة أخرى", "Scan another page"))
                         .font(.custom(arFont, size: 13).weight(.medium))
                 }
                 .frame(maxWidth: .infinity)
@@ -904,7 +906,7 @@ struct Panel: View {
 
             HStack(spacing: 10) {
                 Button(action: m.save) {
-                    Text("حفظ PDF…")
+                    Text(tr("حفظ PDF…", "Save PDF…"))
                         .font(.custom(arFont, size: 13).weight(.medium))
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 3)
@@ -913,7 +915,7 @@ struct Panel: View {
                 .disabled(m.pages.isEmpty || m.busy)
 
                 Button(action: m.clear) {
-                    Text("تفريغ")
+                    Text(tr("تفريغ", "Clear"))
                         .font(.custom(arFont, size: 13))
                         .padding(.vertical, 3)
                         .padding(.horizontal, 4)
@@ -926,7 +928,7 @@ struct Panel: View {
                 Button(action: m.printScanned) {
                     HStack(spacing: 5) {
                         Image(systemName: "printer")
-                        Text("طباعة الممسوح")
+                        Text(tr("طباعة الممسوح", "Print scan"))
                             .font(.custom(arFont, size: 13))
                     }
                     .frame(maxWidth: .infinity)
@@ -941,7 +943,7 @@ struct Panel: View {
                 } label: {
                     HStack(spacing: 5) {
                         Image(systemName: "photo.on.rectangle")
-                        Text("طباعة صور…")
+                        Text(tr("طباعة صور…", "Print photos…"))
                             .font(.custom(arFont, size: 13))
                     }
                     .frame(maxWidth: .infinity)
@@ -955,7 +957,7 @@ struct Panel: View {
                 Button(action: m.printFile) {
                     HStack(spacing: 5) {
                         Image(systemName: "doc.badge.arrow.up")
-                        Text("طباعة ملف…")
+                        Text(tr("طباعة ملف…", "Print file…"))
                             .font(.custom(arFont, size: 13))
                     }
                     .frame(maxWidth: .infinity)
@@ -966,7 +968,7 @@ struct Panel: View {
             }
 
             Toggle(isOn: $m.ocr) {
-                Text("PDF قابل للبحث (استخراج النص العربي)")
+                Text(tr("PDF قابل للبحث (استخراج النص العربي)", "Searchable PDF (Arabic & English text recognition)"))
                     .font(.custom(arFont, size: 11))
             }
             .toggleStyle(.checkbox)
@@ -975,7 +977,7 @@ struct Panel: View {
             Divider()
 
             Button { NSApp.terminate(nil) } label: {
-                Text("إنهاء")
+                Text(tr("إنهاء", "Quit"))
                     .font(.custom(arFont, size: 11))
                     .foregroundStyle(Mid.faint)
             }
@@ -995,9 +997,17 @@ struct Panel: View {
 
     private var settings: some View {
         VStack(alignment: .leading, spacing: 11) {
-            Text("الإعدادات").font(.custom(arFont, size: 13).weight(.bold))
+            Text(tr("الإعدادات", "Settings")).font(.custom(arFont, size: 13).weight(.bold))
             HStack {
-                Text("عنوان الطابعة").font(.custom(arFont, size: 12))
+                Text(tr("اللغة", "Language")).font(.custom(arFont, size: 12))
+                Spacer()
+                Picker("", selection: $lang) {
+                    ForEach(Lang.allCases, id: \.rawValue) { l in Text(l.nativeName).tag(l.rawValue) }
+                }
+                .pickerStyle(.segmented).labelsHidden().frame(width: 150)
+            }
+            HStack {
+                Text(tr("عنوان الطابعة", "Printer address")).font(.custom(arFont, size: 12))
                 Spacer()
                 TextField("", text: $m.printerIP)
                     .textFieldStyle(.roundedBorder)
@@ -1005,7 +1015,7 @@ struct Panel: View {
                     .environment(\.layoutDirection, .leftToRight)
             }
             HStack {
-                Text("الطابعة").font(.custom(arFont, size: 12))
+                Text(tr("الطابعة", "Printer")).font(.custom(arFont, size: 12))
                 Spacer()
                 Picker("", selection: $m.queue) {
                     ForEach(m.queues, id: \.self) { q in Text(q).tag(q) }
@@ -1021,14 +1031,14 @@ struct Panel: View {
                     } else {
                         Image(systemName: "magnifyingglass")
                     }
-                    Text(m.discovering ? "جاري البحث…" : "بحث عن الطابعات المتصلة")
+                    Text(m.discovering ? tr("جاري البحث…", "Searching…") : tr("بحث عن الطابعات المتصلة", "Find connected printers"))
                         .font(.custom(arFont, size: 12))
                 }
             }
             .disabled(m.discovering)
             .frame(maxWidth: .infinity, alignment: .leading)
             HStack {
-                Text("عدد النسخ").font(.custom(arFont, size: 12))
+                Text(tr("عدد النسخ", "Copies")).font(.custom(arFont, size: 12))
                 Spacer()
                 Stepper(value: $m.copies, in: 1...20) {
                     Text("\(m.copies)").font(.custom(arFont, size: 12))
@@ -1036,12 +1046,12 @@ struct Panel: View {
                 .frame(width: 100)
             }
             HStack {
-                Text("شفافية الزجاج").font(.custom(arFont, size: 12))
+                Text(tr("شفافية الزجاج", "Glass transparency")).font(.custom(arFont, size: 12))
                 Spacer()
-                Slider(value: $m.glass, in: 0.35...1.0)
+                Slider(value: $m.glass, in: 0...1)
                     .frame(width: 150)
                     .environment(\.layoutDirection, .leftToRight)
-                Text("\(Int(m.glass * 100))٪")
+                Text(tr("\(Int(m.glass * 100))٪", "\(Int(m.glass * 100))%"))
                     .font(.custom(arFont, size: 11))
                     .foregroundStyle(Mid.secondary)
                     .frame(width: 34, alignment: .trailing)
@@ -1054,7 +1064,7 @@ struct Panel: View {
             } label: {
                 HStack(spacing: 5) {
                     Image(systemName: "slider.horizontal.3")
-                    Text("خيارات الطابعة (الألوان ونوع الورق)")
+                    Text(tr("خيارات الطابعة (الألوان ونوع الورق)", "Printer options (color & paper type)"))
                         .font(.custom(arFont, size: 12))
                 }
             }
@@ -1063,37 +1073,37 @@ struct Panel: View {
             Divider()
 
             HStack {
-                Text("مقاس ورق الصور").font(.custom(arFont, size: 12))
+                Text(tr("مقاس ورق الصور", "Photo paper size")).font(.custom(arFont, size: 12))
                 Spacer()
                 Picker("", selection: $m.photoPaper) {
                     Text("A4").tag("A4")
-                    Text("١٠×١٥ سم").tag("10x15")
-                    Text("١٣×١٨ سم").tag("13x18")
+                    Text(tr("١٠×١٥ سم", "10×15 cm")).tag("10x15")
+                    Text(tr("١٣×١٨ سم", "13×18 cm")).tag("13x18")
                 }
                 .labelsHidden().frame(width: 120)
             }
             HStack {
-                Text("تقسيم الصفحة").font(.custom(arFont, size: 12))
+                Text(tr("تقسيم الصفحة", "Page layout")).font(.custom(arFont, size: 12))
                 Spacer()
                 Picker("", selection: $m.layout) {
-                    Text("صورة واحدة").tag("one")
-                    Text("صورتان").tag("two")
-                    Text("٤ صور").tag("four")
-                    Text("٦ صور").tag("six")
-                    Text("٩ صور").tag("nine")
+                    Text(tr("صورة واحدة", "One photo")).tag("one")
+                    Text(tr("صورتان", "2 photos")).tag("two")
+                    Text(tr("٤ صور", "4 photos")).tag("four")
+                    Text(tr("٦ صور", "6 photos")).tag("six")
+                    Text(tr("٩ صور", "9 photos")).tag("nine")
                     Divider()
-                    Text("شخصية ٤×٦ سم").tag("id46")
-                    Text("شخصية ٣٥×٤٥ مم").tag("id35")
+                    Text(tr("شخصية ٤×٦ سم", "ID 4×6 cm")).tag("id46")
+                    Text(tr("شخصية ٣٥×٤٥ مم", "ID 35×45 mm")).tag("id35")
                 }
                 .labelsHidden().frame(width: 140)
             }
             Toggle(isOn: $m.photoFill) {
-                Text("ملء الصفحة بالكامل (بلا هوامش)")
+                Text(tr("ملء الصفحة بالكامل (بلا هوامش)", "Fill the whole page (borderless)"))
                     .font(.custom(arFont, size: 11))
             }
             .toggleStyle(.checkbox)
             HStack {
-                Text("الدقة").font(.custom(arFont, size: 12))
+                Text(tr("الدقة", "Resolution")).font(.custom(arFont, size: 12))
                 Spacer()
                 Picker("", selection: $m.dpi) {
                     Text("150").tag(150)
@@ -1103,19 +1113,19 @@ struct Panel: View {
                 .labelsHidden().frame(width: 100)
             }
             HStack {
-                Text("الألوان").font(.custom(arFont, size: 12))
+                Text(tr("الألوان", "Color")).font(.custom(arFont, size: 12))
                 Spacer()
                 Picker("", selection: $m.colorMode) {
-                    Text("ملوّن").tag("color")
-                    Text("رمادي").tag("grayscale")
+                    Text(tr("ملوّن", "Color")).tag("color")
+                    Text(tr("رمادي", "Grayscale")).tag("grayscale")
                 }
                 .labelsHidden().frame(width: 100)
             }
         }
         .padding(16)
         .frame(width: 300)
-        .midnight()
-        .environment(\.layoutDirection, .rightToLeft)
+        .midnight(sheet: false)
+        .environment(\.layoutDirection, Lang.current.layout)
     }
 }
 
@@ -1160,7 +1170,14 @@ final class StatusController: NSObject {
 
     private func showPanel() {
         let host = NSHostingView(rootView:
-            Panel().frame(width: 420).environment(\.layoutDirection, .rightToLeft))
+            Panel().frame(width: 420).environment(\.layoutDirection, Lang.current.layout)
+                .preferredColorScheme(.dark))
+        host.appearance = NSAppearance(named: .darkAqua)
+        // قصّ النافذة على شكل الزجاج المستدير، حتى لا تظهر حافة مربّعة عند الزوايا (كما في ميزان)
+        host.wantsLayer = true
+        host.layer?.cornerRadius = 20
+        host.layer?.cornerCurve = .continuous
+        host.layer?.masksToBounds = true
         let h = max(520, host.fittingSize.height)
         let p = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 420, height: h),
                         styleMask: [.nonactivatingPanel, .borderless, .fullSizeContentView],
@@ -1176,7 +1193,10 @@ final class StatusController: NSObject {
             let r = bw.convertToScreen(b.convert(b.bounds, to: nil))
             p.setFrameOrigin(NSPoint(x: r.midX - 210, y: r.minY - h - 6))
         }
+        p.alphaValue = 0
         p.makeKeyAndOrderFront(nil)
+        NSAnimationContext.runAnimationGroup { $0.duration = 0.14; p.animator().alphaValue = 1 }
+        p.invalidateShadow()
         NSApp.activate(ignoringOtherApps: true)
         panel = p
         outsideMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) {
@@ -1193,6 +1213,8 @@ final class StatusController: NSObject {
         win.titleVisibility = .hidden
         win.isOpaque = false
         win.backgroundColor = .clear
+        win.hasShadow = true
+        win.appearance = NSAppearance(named: .darkAqua)
         win.isMovableByWindowBackground = true
         win.isReleasedWhenClosed = false
         win.contentView = root
@@ -1203,7 +1225,7 @@ final class StatusController: NSObject {
     private func showPhotos() {
         if let w = photosWin { w.makeKeyAndOrderFront(nil); NSApp.activate(ignoringOtherApps: true); return }
         let host = NSHostingView(rootView: PhotoGrid())
-        let w = glassWindow(host, title: "طباعة صور", w: 720, h: 520)
+        let w = glassWindow(host, title: tr("طباعة صور", "Print Photos"), w: 720, h: 520)
         w.makeKeyAndOrderFront(nil); NSApp.activate(ignoringOtherApps: true)
         photosWin = w
     }
@@ -1211,7 +1233,7 @@ final class StatusController: NSObject {
     private func showOptions() {
         if let w = optionsWin { w.makeKeyAndOrderFront(nil); NSApp.activate(ignoringOtherApps: true); return }
         let host = NSHostingView(rootView: OptionsView())
-        let w = glassWindow(host, title: "خيارات الطباعة", w: 560, h: 470)
+        let w = glassWindow(host, title: tr("خيارات الطباعة", "Print options"), w: 560, h: 470)
         w.makeKeyAndOrderFront(nil); NSApp.activate(ignoringOtherApps: true)
         optionsWin = w
     }
