@@ -1038,7 +1038,7 @@ struct Panel: View {
             HStack {
                 Text("شفافية الزجاج").font(.custom(arFont, size: 12))
                 Spacer()
-                Slider(value: $m.glass, in: 0.35...0.95)
+                Slider(value: $m.glass, in: 0.35...1.0)
                     .frame(width: 150)
                     .environment(\.layoutDirection, .leftToRight)
                 Text("\(Int(m.glass * 100))٪")
@@ -1154,6 +1154,8 @@ final class StatusController: NSObject {
         showPanel()
     }
 
+    func openNow() { showPanel() }
+
     private func closePanel() {
         panel?.orderOut(nil)
         if let m = outsideMonitor { NSEvent.removeMonitor(m); outsideMonitor = nil }
@@ -1223,7 +1225,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let status = StatusController()
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
+        if let g = ProcessInfo.processInfo.environment["MASEH_GLASS"], let v = Double(g) {
+            Model.shared.glass = v
+        }
         status.setup()
+        if ProcessInfo.processInfo.environment["MASEH_OPEN"] != nil {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak self] in self?.status.openNow() }
+        }
         Model.shared.loadQueues()
         Model.shared.primeLocalNetwork()
         Model.shared.discoverPrinters(auto: true)

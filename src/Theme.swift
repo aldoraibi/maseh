@@ -42,7 +42,7 @@ enum Mid {
 struct GlassEffect: NSViewRepresentable {
     func makeNSView(context: Context) -> NSVisualEffectView {
         let v = NSVisualEffectView()
-        v.material = .underWindowBackground
+        v.material = .hudWindow          // مادة أنعم وأكثر شفافية
         v.blendingMode = .behindWindow
         v.state = .active
         v.isEmphasized = true
@@ -70,16 +70,18 @@ struct GlassEffect: NSViewRepresentable {
 struct GlassBackground: View {
     @ObservedObject var m = Model.shared
     var body: some View {
-        // صبغة الزجاج = 0.25 + 0.6 × (1 − الشفافية) — كلما قلّت الشفافية زادت الصبغة
-        let tint = 0.25 + 0.6 * (1 - m.glass)
+        // الشريط يتحكّم بشفافية اللوح كله: كلما زاد، خفت الزجاج نفسه تجاه سطح المكتب
+        let t = (m.glass - 0.35) / 0.65               // 0 عند 35٪ … 1 عند 100٪
+        let bgAlpha = 1.0 - 0.55 * t                  // 1.0 (معتم) … 0.45 (شفاف لكن مقروء)
         ZStack {
             GlassEffect()
-            Mid.panel.opacity(tint)
+            Mid.panel.opacity(0.32)
             RadialGradient(colors: [Color(hex: "2E3A50", alpha: 0.55), .clear],
                            center: .topTrailing, startRadius: 4, endRadius: 420)
             RadialGradient(colors: [Color(hex: "3E4A5E", alpha: 0.35), .clear],
                            center: .bottomLeading, startRadius: 4, endRadius: 460)
         }
+        .opacity(bgAlpha)
         .ignoresSafeArea()
     }
 }
