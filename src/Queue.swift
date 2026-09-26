@@ -245,31 +245,36 @@ struct QueueBlock: View {
                 HStack(spacing: 8) {
                     Image(systemName: "exclamationmark.triangle.fill")
                         .font(.system(size: 12))
-                        .foregroundStyle(.orange)
+                        .foregroundStyle(Mid.warning)
                     VStack(alignment: .leading, spacing: 1) {
                         Text(q.attention.isEmpty ? "الطباعة متوقفة" : q.attention)
                             .font(.custom(arFont, size: 11).weight(.bold))
+                            .foregroundStyle(Mid.text)
                         Text("ضع ورقاً وستُكمل تلقائياً، أو اضغط «متابعة»")
                             .font(.custom(arFont, size: 10))
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(Mid.secondary)
                     }
                     Spacer()
                     Button(action: q.resume) {
-                        Text("متابعة").font(.custom(arFont, size: 11).weight(.medium))
+                        Text("متابعة")
+                            .font(.custom(arFont, size: 11).weight(.medium))
+                            .foregroundStyle(Mid.deep)
+                            .padding(.vertical, 5).padding(.horizontal, 12)
+                            .background(Capsule().fill(Mid.warning))
                     }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.small)
+                    .buttonStyle(.plain)
                 }
-                .padding(8)
-                .background(Color.orange.opacity(0.12))
-                .clipShape(RoundedRectangle(cornerRadius: 8))
+                .padding(9)
+                .background(Mid.warning.opacity(0.14))
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
             }
             HStack(spacing: 6) {
                 Image(systemName: "printer.fill")
                     .font(.system(size: 11))
-                    .foregroundStyle(q.paused ? Color.orange : Color.accentColor)
+                    .foregroundStyle(q.paused ? Mid.warning : Mid.accent)
                 Text("طابور الطباعة — \(q.state)")
                     .font(.custom(arFont, size: 11).weight(.medium))
+                    .foregroundStyle(Mid.secondary)
                 Spacer()
                 if q.jobs.count > 1 {
                     Button(action: q.cancelAll) {

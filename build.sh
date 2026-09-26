@@ -35,6 +35,8 @@ echo "▸ بناء التطبيق…"
 ARCH="$(uname -m)"
 swiftc -O -parse-as-library -target "${ARCH}-apple-macos14.0" \
   "$HERE/src/ScannerApp.swift" \
+  "$HERE/src/Theme.swift" \
+  "$HERE/src/YahyaSignature.swift" \
   "$HERE/src/PhotosPicker.swift" \
   "$HERE/src/Queue.swift" \
   "$HERE/src/Options.swift" \

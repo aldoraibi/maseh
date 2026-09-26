@@ -217,7 +217,8 @@ struct OptionsView: View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
                 Text("خيارات الطباعة")
-                    .font(.custom(arFont, size: 14).weight(.bold))
+                    .font(.custom(arSerif, size: 16).weight(.medium))
+                    .foregroundStyle(Mid.text)
                 Spacer()
                 Picker("", selection: $m.queue) {
                     ForEach(m.queues, id: \.self) { q in Text(q).tag(q) }
@@ -270,12 +271,15 @@ struct OptionsView: View {
                 Spacer()
                 Text("تُطبَّق على كل مهام الطباعة من التطبيق")
                     .font(.custom(arFont, size: 11))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Mid.secondary)
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 11)
+
+            SignatureFooter().padding(.bottom, 10)
         }
         .frame(minWidth: 520, minHeight: 420)
+        .midnight()
         .environment(\.layoutDirection, .rightToLeft)
         .onAppear { m.loadQueues(); po.load() }
     }

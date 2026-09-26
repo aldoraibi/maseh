@@ -756,7 +756,8 @@ struct Panel: View {
             Divider()
             footer
         }
-        .frame(width: 380)
+        .frame(width: 420)
+        .midnight()
         .onDrop(of: [UTType.fileURL], isTargeted: $dropTargeted) { providers in
             handleDrop(providers)
         }
@@ -790,43 +791,43 @@ struct Panel: View {
     }
 
     private var header: some View {
-        HStack(spacing: 10) {
-            Image(systemName: "scanner.fill")
-                .font(.system(size: 17, weight: .medium))
-                .foregroundStyle(.tint)
+        HStack(spacing: 11) {
+            IconTile(symbol: "scanner.fill", degree: 0, size: 34)
             VStack(alignment: .leading, spacing: 1) {
-                Text("الماسح الضوئي")
-                    .font(.custom(arFont, size: 14).weight(.bold))
+                Text("الماسح")
+                    .font(.custom(arSerif, size: 16).weight(.medium))
+                    .foregroundStyle(Mid.text)
                 Text(m.status.isEmpty ? "Canon G3010" : m.status)
                     .font(.custom(arFont, size: 11))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(m.status.contains("⚠️") ? Mid.warning : Mid.secondary)
                     .lineLimit(1)
             }
             Spacer()
             if m.progress { ProgressView().controlSize(.small) }
             Button { showSettings.toggle() } label: {
                 Image(systemName: "gearshape")
+                    .font(.system(size: 15))
             }
             .buttonStyle(.plain)
-            .foregroundStyle(.secondary)
+            .foregroundStyle(Mid.secondary)
             .popover(isPresented: $showSettings, arrowEdge: .bottom) { settings }
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 11)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 13)
     }
 
     private var empty: some View {
         VStack(spacing: 12) {
             Image(systemName: "doc.viewfinder")
                 .font(.system(size: 30, weight: .light))
-                .foregroundStyle(.quaternary)
+                .foregroundStyle(Mid.faint)
             Text("ضع الورقة في الماسح واضغط «مسح صفحة»")
                 .font(.custom(arFont, size: 12))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Mid.secondary)
                 .multilineTextAlignment(.center)
             Text("أو اسحب ملفاً أو صورة وأفلته هنا لطباعته")
                 .font(.custom(arFont, size: 11))
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(Mid.faint)
                 .multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity)
@@ -889,7 +890,7 @@ struct Panel: View {
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 5)
             }
-            .buttonStyle(.borderedProminent)
+            .buttonStyle(PrimaryFill())
             .disabled(m.busy)
 
             HStack(spacing: 10) {
@@ -899,7 +900,7 @@ struct Panel: View {
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 3)
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(GlassCapsule())
                 .disabled(m.pages.isEmpty || m.busy)
 
                 Button(action: m.clear) {
@@ -908,7 +909,7 @@ struct Panel: View {
                         .padding(.vertical, 3)
                         .padding(.horizontal, 4)
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(GlassCapsule())
                 .disabled(m.pages.isEmpty || m.busy)
             }
 
@@ -922,7 +923,7 @@ struct Panel: View {
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 3)
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(GlassCapsule())
                 .disabled(m.pages.isEmpty || m.busy)
 
                 Button {
@@ -937,7 +938,7 @@ struct Panel: View {
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 3)
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(GlassCapsule())
                 .disabled(m.busy)
             }
 
@@ -951,7 +952,7 @@ struct Panel: View {
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 3)
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(GlassCapsule())
                 .disabled(m.busy)
             }
 
@@ -967,14 +968,16 @@ struct Panel: View {
             Button { NSApp.terminate(nil) } label: {
                 Text("إنهاء")
                     .font(.custom(arFont, size: 11))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Mid.faint)
             }
             .buttonStyle(.plain)
             .frame(maxWidth: .infinity, alignment: .leading)
+
+            SignatureFooter()
         }
-        .padding(.horizontal, 14)
+        .padding(.horizontal, 16)
         .padding(.top, 11)
-        .padding(.bottom, 10)
+        .padding(.bottom, 12)
     }
 
     private func openPhotos() {
@@ -1093,8 +1096,9 @@ struct Panel: View {
                 .labelsHidden().frame(width: 100)
             }
         }
-        .padding(15)
-        .frame(width: 290)
+        .padding(16)
+        .frame(width: 300)
+        .midnight()
         .environment(\.layoutDirection, .rightToLeft)
     }
 }

@@ -152,15 +152,19 @@ struct PhotoGrid: View {
                         Image(systemName: "printer")
                         Text("طباعة").font(.custom(arFont, size: 13).weight(.medium))
                     }
-                    .padding(.horizontal, 6).padding(.vertical, 2)
+                    .foregroundStyle(Mid.deep)
+                    .padding(.horizontal, 14).padding(.vertical, 7)
+                    .background(Capsule().fill(Mid.accent))
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(.plain)
                 .disabled(lib.selected.isEmpty || lib.working || m.busy)
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
         }
         .frame(minWidth: 640, minHeight: 460)
+        .midnight()
+        .safeAreaInset(edge: .bottom) { SignatureFooter().padding(.bottom, 8) }
         .environment(\.layoutDirection, .rightToLeft)
         .safeAreaInset(edge: .top) {
             if !q.jobs.isEmpty { QueueBlock() }
