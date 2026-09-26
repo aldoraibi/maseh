@@ -74,6 +74,9 @@ final class Model: ObservableObject {
     }
     @Published var queues: [String] = []
     @Published var discovering = false
+    @Published var glass: Double = 0.80 {           // شفافية الزجاج (المرجع: افتراضي 80٪)
+        didSet { UserDefaults.standard.set(glass, forKey: "glass") }
+    }
 
     private init() {
         let d = UserDefaults.standard
@@ -86,6 +89,7 @@ final class Model: ObservableObject {
         if d.object(forKey: "copies") != nil { copies = max(1, d.integer(forKey: "copies")) }
         if let v = d.string(forKey: "photoPaper") { photoPaper = v }
         if d.object(forKey: "photoFill") != nil { photoFill = d.bool(forKey: "photoFill") }
+        if d.object(forKey: "glass") != nil { glass = d.double(forKey: "glass") }
         if let v = d.string(forKey: "layout") { layout = v }
     }
 
@@ -1029,6 +1033,17 @@ struct Panel: View {
                     Text("\(m.copies)").font(.custom(arFont, size: 12))
                 }
                 .frame(width: 100)
+            }
+            HStack {
+                Text("شفافية الزجاج").font(.custom(arFont, size: 12))
+                Spacer()
+                Slider(value: $m.glass, in: 0.35...0.95)
+                    .frame(width: 150)
+                    .environment(\.layoutDirection, .leftToRight)
+                Text("\(Int(m.glass * 100))٪")
+                    .font(.custom(arFont, size: 11))
+                    .foregroundStyle(Mid.secondary)
+                    .frame(width: 34, alignment: .trailing)
             }
             Divider()
             Button {

@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 
 // هوية «منتصف الليل» — المرجع: ~/ClaudeFonts/brand/README.md
 // خطوط ثمانية، ثيم داكن أحادي، زجاج، زوايا، أيقونات ببلاطات، وتوقيع في الأسفل.
@@ -37,14 +38,56 @@ enum Mid {
     static func degree(_ i: Int) -> Color { degrees[max(0, min(degrees.count - 1, i))] }
 }
 
-// خلفية النافذة: عمق مع توهّجين مموّهين
-struct MidnightBackground: View {
+// زجاج حقيقي: NSVisualEffectView يموّه ما خلف النافذة
+struct GlassEffect: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSVisualEffectView {
+        let v = NSVisualEffectView()
+        v.material = .underWindowBackground
+        v.blendingMode = .behindWindow
+        v.state = .active
+        v.isEmphasized = true
+        // النافذة شفافة حتى يظهر التمويه
+        DispatchQueue.main.async {
+            if let w = v.window {
+                w.isOpaque = false
+                w.backgroundColor = .clear
+                w.hasShadow = true
+            }
+        }
+        return v
+    }
+    func updateNSView(_ v: NSVisualEffectView, context: Context) {}
+}
+
+// خلفية «Liquid Glass»: زجاج + صبغة #1E2430 حسب الشفافية + توهّجان خفيفان
+struct GlassBackground: View {
+    @ObservedObject var m = Model.shared
     var body: some View {
+        // صبغة الزجاج = 0.25 + 0.6 × (1 − الشفافية) — كلما قلّت الشفافية زادت الصبغة
+        let tint = 0.25 + 0.6 * (1 - m.glass)
+        ZStack {
+            GlassEffect()
+            Mid.panel.opacity(tint)
+            RadialGradient(colors: [Color(hex: "2E3A50", alpha: 0.55), .clear],
+                           center: .topTrailing, startRadius: 4, endRadius: 420)
+            RadialGradient(colors: [Color(hex: "3E4A5E", alpha: 0.35), .clear],
+                           center: .bottomLeading, startRadius: 4, endRadius: 460)
+        }
+        .ignoresSafeArea()
+    }
+}
+
+// خلفية مصمتة (للتصيير خارج الشاشة فقط — لا تمويه هناك)
+struct MidnightBackground: View {
+    @ObservedObject var m = Model.shared
+    var body: some View {
+        let tint = 0.25 + 0.6 * (1 - m.glass)
         ZStack {
             Mid.deep
-            RadialGradient(colors: [Color(hex: "2E3A50", alpha: 0.90), .clear],
+            Mid.panel.opacity(tint)
+            RadialGradient(colors: [Color(hex: "2E3A50", alpha: 0.55), .clear],
                            center: .topTrailing, startRadius: 4, endRadius: 420)
-            RadialGradient(colors: [Color(hex: "3E4A5E", alpha: 0.55), .clear],
+            RadialGradient(colors: [Color(hex: "3E4A5E", alpha: 0.35), .clear],
                            center: .bottomLeading, startRadius: 4, endRadius: 460)
         }
         .ignoresSafeArea()
@@ -52,9 +95,9 @@ struct MidnightBackground: View {
 }
 
 extension View {
-    /// ثيم منتصف الليل لأي نافذة/لوح
+    /// ثيم منتصف الليل الزجاجي لأي نافذة/لوح
     func midnight() -> some View {
-        self.background(MidnightBackground())
+        self.background(GlassBackground())
             .foregroundStyle(Mid.text)
             .tint(Mid.accent)
             .environment(\.colorScheme, .dark)
