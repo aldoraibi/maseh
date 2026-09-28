@@ -5,7 +5,8 @@ set -e
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
 BUILD="$HERE/.build"
-APP="$HOME/Applications/الماسح.app"
+# يُثبَّت في مجلد أدوات يحيى إن وُجد (هناك عنصر الدخول)، وإلا في ~/Applications
+if [ -d "/Applications/YD Tools" ]; then APP="/Applications/YD Tools/الماسح.app"; else APP="$HOME/Applications/الماسح.app"; fi
 PIXMA_REPO="https://github.com/pdrgds/pixma-rs.git"
 PIXMA_REF="b9be726b002a0c1720c9928f3012b505bdb5ad1c"   # إصدار مثبّت من pixma-rs
 
