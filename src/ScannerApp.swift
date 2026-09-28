@@ -803,7 +803,11 @@ struct Panel: View {
 
     private var header: some View {
         HStack(spacing: 11) {
-            IconTile(symbol: "scanner.fill", degree: 0, size: 34)
+            // نفس أيقونة التطبيق (وهي نفس رمز شريط القوائم)
+            Image(nsImage: NSApp.applicationIconImage)
+                .resizable().interpolation(.high)
+                .frame(width: 42, height: 42)
+                .padding(-4)
             VStack(alignment: .leading, spacing: 1) {
                 Text(tr("الماسح", "Maseh"))
                     .font(.custom(arSerif, size: 16).weight(.medium))
